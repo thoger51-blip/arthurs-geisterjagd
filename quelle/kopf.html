@@ -1,0 +1,140 @@
+<title>Arthurs Geisterjagd</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&display=swap">
+<style>
+  /* Aufbau: Am Computer oben die Anzeige, darunter das Zimmer.
+     Am Handy: hochkant Zimmer oben und Steuerung unten; quer Zimmer in der Mitte,
+     links der Joystick, rechts der Saug-Knopf. */
+  :root {
+    --rosa: #ff69b4;        /* Fußboden – Arthurs Pink */
+    --schwarz: #111014;     /* Ränder und Türen */
+    --himmel: #2b1030;      /* Hintergrund um das Zimmer herum */
+    --text: #fff4fa;
+    --geist: #6fd3ff;       /* Leuchtblau wie die Geister */
+    --gold: #ffd34d;
+    --schrift: "Baloo 2", "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--himmel);
+    color: var(--text);
+    font-family: var(--schrift);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; padding-inline: 16px; padding-block: 12px; box-sizing: border-box;
+    overflow: hidden; user-select: none; -webkit-user-select: none;
+    -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+  .anzeige {
+    width: min(100%, 960px); display: flex; justify-content: space-between; align-items: baseline;
+    flex-wrap: wrap; gap: 4px 16px;
+  }
+  .anzeige h1 { margin: 0; font-size: clamp(22px, 4vw, 34px); font-weight: 800; letter-spacing: .5px; }
+  .zaehler { font-size: clamp(18px, 3vw, 26px); font-weight: 800; color: var(--geist); font-variant-numeric: tabular-nums; }
+  .raum {
+    position: relative;
+    width: min(100%, 960px, calc((100vh - 190px) * 1.6)); aspect-ratio: 8 / 5; max-width: 100%;
+  }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .tipp { margin: 0; font-size: 17px; text-align: center; min-height: 1.5em; }
+  .tipp b { color: var(--gold); }
+  .nochmal {
+    position: absolute; left: 50%; bottom: 14%; transform: translateX(-50%);
+    font: 800 22px var(--schrift); color: var(--schwarz); background: var(--gold);
+    border: 0; border-radius: 999px; padding: 8px 26px; cursor: pointer;
+    box-shadow: 0 4px 0 #b8871a; z-index: 3;
+  }
+  .nochmal:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
+
+  /* Die drei Antwort-Knöpfe für die Rechen-Aufgabe */
+  .antworten {
+    position: absolute; left: 50%; bottom: 10%; transform: translateX(-50%);
+    display: flex; gap: clamp(10px, 3vw, 24px); z-index: 3;
+  }
+  .antwort {
+    font: 800 clamp(22px, 5vw, 38px) var(--schrift); font-variant-numeric: tabular-nums;
+    min-width: clamp(84px, 18vw, 150px); padding: 6px 14px; white-space: nowrap;
+    color: var(--schwarz); background: var(--gold); border: 0; border-radius: 18px;
+    box-shadow: 0 5px 0 #b8871a; cursor: pointer; touch-action: manipulation;
+  }
+  .antwort:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
+  .antwort.falsch { background: #6b5560; color: #c9b8c2; box-shadow: 0 5px 0 #3d2f37; cursor: default; animation: wackeln .35s; }
+  @keyframes wackeln { 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
+  @media (prefers-reduced-motion: reduce) { .antwort.falsch { animation: none; } }
+
+  /* ---- Steuerung fürs Handy und Tablet (am Computer unsichtbar) ---- */
+  .steuerung { display: none; width: 100%; align-items: stretch; gap: 16px; }
+  .joyfeld { position: relative; flex: 1; min-height: 170px; touch-action: none; }
+  .joyfeld .hinweis {
+    position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
+    font-size: 15px; opacity: .55; text-align: center; pointer-events: none; white-space: nowrap;
+  }
+  .joy {
+    position: absolute; width: 132px; height: 132px; margin: -66px 0 0 -66px;
+    border-radius: 50%; border: 3px solid rgba(255, 105, 180, .7); background: rgba(17, 16, 20, .45);
+    pointer-events: none;
+  }
+  .knauf {
+    position: absolute; left: 50%; top: 50%; width: 62px; height: 62px; margin: -31px 0 0 -31px;
+    border-radius: 50%; background: var(--rosa); box-shadow: 0 4px 0 #b83f81;
+  }
+  #saugen {
+    align-self: center; flex: none;
+    width: 118px; height: 118px; border-radius: 50%;
+    font: 800 21px var(--schrift); color: var(--text); background: var(--schwarz);
+    border: 4px solid var(--geist); touch-action: none; box-shadow: 0 5px 0 #1c6a8c;
+  }
+  #saugen.an { background: var(--geist); color: var(--schwarz); transform: translateY(3px); box-shadow: 0 2px 0 #1c6a8c; }
+  #saugen:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+
+  @media (pointer: coarse) {
+    body { gap: 8px; padding-inline: 12px; padding-block: 8px; justify-content: flex-start; touch-action: none; }
+    .raum { width: 100%; }
+    .steuerung { display: flex; flex: 1; }
+    .tipp { font-size: 16px; }
+  }
+  /* Handy quer: alles auf einen Bildschirm, Steuerung links und rechts neben dem Zimmer */
+  @media (pointer: coarse) and (orientation: landscape) {
+    body { justify-content: center; padding-block: 6px; }
+    .anzeige { display: none; }
+    .raum {
+      width: auto; height: calc(100vh - 12px); height: calc(100dvh - 12px);
+      max-width: calc(100vw - 24px); max-height: calc((100vw - 24px) / 1.6);
+    }
+    .steuerung { position: fixed; inset: 0; pointer-events: none; z-index: 2; }
+    .joyfeld { position: absolute; left: 0; top: 0; bottom: 0; width: 42vw; pointer-events: auto; }
+    .joyfeld .hinweis { display: none; }
+    #saugen { position: absolute; right: max(16px, env(safe-area-inset-right, 0px)); bottom: 22px; pointer-events: auto; opacity: .9; }
+    .tipp {
+      position: fixed; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 2;
+      background: rgba(17, 16, 20, .82); padding: 4px 16px; border-radius: 999px;
+      max-width: 70vw; pointer-events: none; transition: opacity .6s;
+    }
+    .tipp.leise { opacity: 0; }
+    .antworten { bottom: 30%; }
+  }
+</style>
+
+<div class="anzeige">
+  <h1>Arthurs Geisterjagd</h1>
+  <div class="zaehler" id="zaehler" aria-live="polite">Gefangen: 0 von 5</div>
+</div>
+<div class="raum">
+  <canvas id="spielfeld" width="960" height="600" aria-label="Spielfeld: ein pinkes Zimmer von schräg oben mit dem Stoffmännchen, dem Staubsauger und den Geistern"></canvas>
+  <div class="antworten" id="antworten" hidden>
+    <button class="antwort" id="antwort1"></button>
+    <button class="antwort" id="antwort2"></button>
+    <button class="antwort" id="antwort3"></button>
+  </div>
+  <button class="nochmal" id="nochmal" hidden>Nochmal spielen</button>
+</div>
+<p class="tipp" id="tipp">Hol dir den <b>Staubsauger</b>!</p>
+<div class="steuerung">
+  <div class="joyfeld" id="joyfeld" aria-label="Laufen: Daumen hier hinlegen und ziehen">
+    <span class="hinweis">Daumen hinlegen und ziehen</span>
+    <div class="joy" id="joy"><div class="knauf" id="knauf"></div></div>
+  </div>
+  <button id="saugen">SAUGEN</button>
+</div>
+
