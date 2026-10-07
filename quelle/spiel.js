@@ -1,5 +1,5 @@
 // ================================================================
-//  ARTHURS GEISTERJAGD – Teil 8
+//  ARTHURS GEISTERJAGD – Teil 9
 //  Level 1:  Zimmer 1 – fünf kleine Geister
 //            Zimmer 2 – der Geisterkönig
 //  Level 2:  Zimmer 3 – drei Kronen-Geister (und Herzen!)
@@ -9,7 +9,9 @@
 //            Zimmer 7 – der Stehauf-Geist mit zwei Balken
 //  Level 4:  Zimmer 8 – Kistenteufel, schneller Geist und die Dynamitkanone
 //            Zimmer 9 – der Blink-Geist mit drei Balken
-//  Level 2, 3 und 4 hat Arthur selbst gezeichnet und erfunden.
+//  Level 5:  Zimmer 10 – die lebendige Truhe, der Kistenteufel, ein Kronen-Geist und zwei Kanonen
+//            Zimmer 11 – der Mega-Geist
+//  Level 2 bis 5 hat Arthur selbst gezeichnet und erfunden.
 // ================================================================
 
 // ---- 0. Stellschrauben -------------------------------------------
@@ -43,6 +45,8 @@ const BILDER = {
   kisteRot: "__kiste_rot__",   // die rote Kiste aus Level 4
   kanone: "__kanone__",        // die Dynamitkanone mit dem Totenkopf
   dynamit: "__dynamit__",      // ein Bündel Dynamit mit brennender Zündschnur
+  truheZu:  "__truhe_zu__",    // die gelbe Truhe mit Schloss (Level 5)
+  truheAuf: "__truhe_auf__",   // dieselbe Truhe mit offenem Deckel
 };
 
 // Hier laden wir alle Bilder. Erst wenn alle fertig sind, geht's los.
@@ -105,6 +109,12 @@ const ZIMMER = {
        tuerHinten: { von: 390, bis: 510 }, herzen: true, geisterBeissen: true, geisterTempo: 1.9 },
   9: { level: 4, hinten: "#1c1030", links: "#170d28", rechts: "#130a21", streifen: "rgba(255,90,120,0.10)",
        herzen: true, geisterBeissen: true, geisterTempo: 1.9, kerzen: true, geld: GELD_LEVEL_3 },
+  // Level 5: Am Anfang hat man keinen Staubsauger – der steckt in der Truhe!
+  10: { level: 5, hinten: "#6b4423", links: "#5c3a1e", rechts: "#4f3219", streifen: "rgba(255,211,77,0.14)",
+        tuerHinten: { von: 250, bis: 370 }, herzen: true, geisterBeissen: true, geisterTempo: 1.9 },
+  11: { level: 5, hinten: "#3d1420", links: "#33101b", rechts: "#2a0d16", streifen: "rgba(255,211,77,0.10)",
+        tuerHinten: { von: 620, bis: 740, zu: true, farbe: "#3b82c4" },
+        herzen: true, geisterBeissen: true, geisterTempo: 1.9, geld: GELD_LEVEL_3 },
 };
 let zimmer = 1;
 let tuerOffen = false;
@@ -144,7 +154,12 @@ let herzHuepfer = 0;      // kleiner Hüpfer in der Herz-Anzeige, wenn eins weg 
 let treffBlitz = 0;       // kurzes rotes Aufblitzen bei einem Treffer
 
 // ---- 5. Der Staubsauger ------------------------------------------
-const sauger = { x: 730, z: 450, groesse: 115 };
+const sauger = {
+  x: 730, z: 450, groesse: 115,
+  versteckt: false,       // in Level 5 steckt er am Anfang in der Truhe
+  flug: 1,                // 0 = springt gerade aus der Truhe, 1 = liegt am Boden
+  startX: 0, startZ: 0, zielX: 0, zielZ: 0,
+};
 let saugtGerade = false;
 
 // ---- 6. Die kleinen Geister ---------------------------------------
@@ -216,6 +231,8 @@ function bossMachen(was) {
     leben: 1,               // so viele Balken hat er nacheinander (der Stehauf-Geist hat 2)
     jagdPhasen: false,      // jagt er nur manchmal (Level 3) oder kommt er immer langsam hinterher?
     blinkt: false,          // Level 4: Blinkt er immer wieder und rast dann durchs Zimmer?
+    truhe: false,           // Level 5: Ist es gar kein Geist, sondern die lebendige Truhe?
+    ruf: "BUH!",            // was er ruft, wenn er das Männchen erwischt
     tiefFaktor: 1,          // große Geister erwischen einen auch, wenn man weiter hinter ihnen steht (kleiner als 1)
     ruftHilfe: false,       // ruft er kleine Geister zu Hilfe?
     balkenOben: false,      // großer Balken oben im Bild – oder kleiner Balken über dem Kopf?
@@ -401,16 +418,33 @@ function teufelBesiegt() {
   rechnung = null;
   document.getElementById("antworten").hidden = true;
   kiste.zustand = "besiegt";
-  tuerOffen = true;
-  setTimeout(siegesMelodie, 200);
   sprechblase("Richtig?! Neiiin!", kiste.x, 330, kiste.z);
   for (let i = 0; i < 40; i++) sternchen(kiste.x + zufall(-60, 60), zufall(120, 330), kiste.z, i % 2 ? "#ffd34d" : "#ff5a5a");
   zaehlerZeigen("Kistenteufel: besiegt!");
+
+  if (zimmer === 10) {
+    // Level 5: Die Tür bleibt noch zu. Erst kommt der Kronen-Geist – und die Kanonen wachen auf!
+    stufe = 3;
+    const k = bossMachen({
+      name: "Kronen-Geist", x: 290, z: 200, groesse: 230, kraftMax: 130,
+      jagt: 1.6, jagdPhasen: true, dx: 0.8, dz: 0.5, balkenOben: true,
+    });
+    k.schubsPause = 120;                 // er braucht einen Moment, bis er loslegt
+    bosse = [k]; bosseAmAnfang = 1;
+    for (let i = 0; i < 30; i++) sternchen(k.x + zufall(-50, 50), zufall(60, 260), k.z, i % 2 ? "#ffd34d" : "#6fd3ff");
+    kanonenWecken();
+    setTimeout(lachTon, 300);
+    zaehlerZeigen("Kronen-Geist!");
+    tippZeigen("Richtig! Aber jetzt kommt der <b>Kronen-Geist</b> – und die Kanonen schießen!");
+    return;
+  }
+
+  tuerOffen = true;
+  setTimeout(siegesMelodie, 200);
   tippZeigen("Richtig gerechnet! Die <b>Tür hinten</b> ist offen!");
   // In Level 4 wacht jetzt die Kanone auf!
-  if (kanone) {
-    kanone.wach = true; kanone.schussUhr = 90;
-    setTimeout(bummTon, 500);
+  if (kanonen.length > 0) {
+    kanonenWecken();
     zaehlerZeigen("Ab zur Tür!");
     tippZeigen("Richtig! Aber jetzt schießt die <b>Kanone</b>. Weich dem Dynamit aus und lauf zur Tür!");
   }
@@ -432,48 +466,67 @@ function kisteBewegen() {
   // Steht das Männchen an der Kurbel?
   const anDerKurbel = Math.hypot(maennchen.x - (kiste.x + KISTE.kurbelDX), maennchen.z - kiste.z) < 75;
   if (!anDerKurbel) kiste.bereit = true;                       // erst weggehen, dann geht es nochmal
+  if (kiste.gesperrt) {
+    // Level 5: Die Kurbel klemmt, solange die Truhe noch da ist
+    if (anDerKurbel && kiste.bereit) {
+      kiste.bereit = false;
+      tippZeigen("Die Kurbel klemmt noch. Erst muss die <b>Truhe</b> weg!");
+    }
+    return;
+  }
   if (kiste.zustand === "zu" && anDerKurbel && kiste.bereit && kiste.hoch === 0) teufelSpringtRaus();
 }
 
-// ---- 8c. Die Dynamitkanone (Level 4) --------------------------------
-// Die Kanone hängt an der linken Wand. Solange der Kistenteufel noch da ist, schläft sie.
+// ---- 8c. Die Dynamitkanonen (Level 4 und 5) --------------------------
+// Eine Kanone hängt an der linken oder rechten Wand. Solange der Kistenteufel noch da ist, schläft sie.
 // Danach schwenkt sie hin und her und schießt Dynamit quer durchs Zimmer.
 // Das Dynamit fliegt langsam genug zum Ausweichen – und es macht keine Löcher in den Boden.
-let kanone = null;
+let kanonen = [];
 let dynamit = [];
 // Wo im Bild die wichtigen Stellen sind (gemessen an den Bildern)
 const KANONE = { massstab: 0.8, ankerX: 46.4, ankerY: 79, winkel0: 1.4407, rohr: 175 };
 const DYNAMIT = { massstab: 0.9, ankerX: 21.2, ankerY: 45.9, winkel0: 1.408 };
 
-function kanoneAufstellen() {
-  kanone = {
-    x: 50, z: 150,            // an der linken Wand, ziemlich weit hinten
-    winkel: 0,                // wohin sie zielt: 0 = quer durchs Zimmer nach rechts
-    zeit: 0,
+// seite: "links" oder "rechts" · z: wie weit hinten · vorlauf: damit zwei Kanonen nicht gleichzeitig schießen
+function kanoneAufstellen(seite, z, vorlauf, pause) {
+  const grund = seite === "links" ? 0 : Math.PI;      // ihre Grundrichtung: quer durchs Zimmer zur anderen Wand
+  kanonen.push({
+    seite,
+    x: seite === "links" ? 50 : BREITE - 50, z,
+    grund,
+    winkel: grund,            // wohin sie gerade zielt
+    zeit: vorlauf,
     wach: false,              // sie schläft, bis der Kistenteufel besiegt ist
-    schussUhr: 90,            // zählt runter bis zum nächsten Schuss
+    schussUhr: 90 + vorlauf,  // zählt runter bis zum nächsten Schuss
+    pause,                    // so lange wartet sie zwischen zwei Schüssen
     rueckstoss: 0,            // kurzes Zucken nach dem Schuss
-  };
+  });
 }
 
-function kanoneBewegen() {
-  if (!kanone) return;
-  if (kanone.rueckstoss > 0) kanone.rueckstoss = kanone.rueckstoss - 1;
-  if (!kanone.wach || wechselt || geschafft) return;
-  // Sie schwenkt langsam im Halbkreis hin und her
-  kanone.zeit = kanone.zeit + 1;
-  kanone.winkel = Math.asin(Math.sin(kanone.zeit * 0.012)) * 0.72;      // gleichmäßig von -65° bis +65°
-  kanone.schussUhr = kanone.schussUhr - 1;
-  if (kanone.schussUhr <= 0) {
-    kanone.schussUhr = DYNAMIT_PAUSE;
-    kanone.rueckstoss = 12;
-    bummTon();
-    const richtX = Math.cos(kanone.winkel), richtZ = Math.sin(kanone.winkel);
-    dynamit.push({
-      x: kanone.x + richtX * KANONE.rohr, z: kanone.z + richtZ * KANONE.rohr,
-      dx: richtX * DYNAMIT_TEMPO, dz: richtZ * DYNAMIT_TEMPO,
-      wackeln: zufall(0, 6.28),
-    });
+function kanonenWecken() {
+  for (const k of kanonen) k.wach = true;
+  setTimeout(bummTon, 500);
+}
+
+function kanonenBewegen() {
+  for (const k of kanonen) {
+    if (k.rueckstoss > 0) k.rueckstoss = k.rueckstoss - 1;
+    if (!k.wach || wechselt || geschafft) continue;
+    // Sie schwenkt langsam im Halbkreis hin und her
+    k.zeit = k.zeit + 1;
+    k.winkel = k.grund + Math.asin(Math.sin(k.zeit * 0.012)) * 0.72;      // gleichmäßig 65° nach beiden Seiten
+    k.schussUhr = k.schussUhr - 1;
+    if (k.schussUhr <= 0) {
+      k.schussUhr = k.pause;
+      k.rueckstoss = 12;
+      bummTon();
+      const richtX = Math.cos(k.winkel), richtZ = Math.sin(k.winkel);
+      dynamit.push({
+        x: k.x + richtX * KANONE.rohr, z: k.z + richtZ * KANONE.rohr,
+        dx: richtX * DYNAMIT_TEMPO, dz: richtZ * DYNAMIT_TEMPO,
+        wackeln: zufall(0, 6.28),
+      });
+    }
   }
 }
 
@@ -502,6 +555,80 @@ function dynamitBewegen() {
     }
   }
   dynamit = dynamit.filter((d) => !d.weg);
+}
+
+// ---- 8d. Die Truhe (Level 5) ----------------------------------------
+// In der gelben Truhe steckt der Staubsauger. Kommt man nah heran, klappt sie auf und er springt heraus.
+// Sobald man ihn aufhebt, wird die Truhe lebendig: Sie jagt das Männchen und klappert mit dem Deckel.
+let truhe = null;
+// Im ersten Zimmer von Level 5 geht es der Reihe nach:
+//   0 = Truhe öffnen und Staubsauger holen   1 = Truhe einsaugen   2 = Kistenteufel
+//   3 = Kronen-Geist einsaugen               4 = die Tür ist offen
+let stufe = 0;
+
+function truheAufstellen(x, z) {
+  truhe = { x, z, groesse: 165, offen: false };
+}
+
+function truheBewegen() {
+  // Der Staubsauger fliegt im Bogen aus der Truhe
+  if (sauger.flug < 1) {
+    sauger.flug = Math.min(1, sauger.flug + 1 / 45);
+    sauger.x = sauger.startX + (sauger.zielX - sauger.startX) * sauger.flug;
+    sauger.z = sauger.startZ + (sauger.zielZ - sauger.startZ) * sauger.flug;
+  }
+  if (!truhe || truhe.offen || wechselt) return;
+  // Kommt das Männchen nah heran, klappt der Deckel auf
+  if (Math.hypot(maennchen.x - truhe.x, maennchen.z - truhe.z) < 125) {
+    truhe.offen = true;
+    boingTon();
+    for (let i = 0; i < 20; i++) sternchen(truhe.x + zufall(-30, 30), zufall(120, 200), truhe.z, "#ffd34d");
+    sauger.versteckt = false; sauger.flug = 0;
+    sauger.startX = truhe.x; sauger.startZ = truhe.z;
+    // Er landet ein Stück neben der Truhe – auf der Seite, wo das Männchen nicht steht
+    sauger.zielX = truhe.x + (maennchen.x < truhe.x ? 170 : -170);
+    sauger.zielZ = truhe.z + 80;
+    sauger.x = sauger.startX; sauger.z = sauger.startZ;
+    zaehlerZeigen("Da ist er!");
+    tippZeigen("Die Truhe ist auf! Hol dir den <b>Staubsauger</b>!");
+  }
+}
+
+// Der Staubsauger ist aufgehoben – jetzt wird die Truhe böse!
+function truheWirdLebendig() {
+  stufe = 1;
+  const k = bossMachen({
+    name: "Truhe", x: truhe.x, z: truhe.z, groesse: truhe.groesse, kraftMax: 100,
+    truhe: true, schwebt: 0, radius: 62, jagt: 1.25, jagdPhasen: true, dx: 0.6, dz: 0.4, stoss: 12, ruf: "HAPPS!",
+  });
+  k.jagtGerade = true; k.jagdUhr = 200;    // sie legt sofort los …
+  k.schubsPause = 80;                      // … aber man bekommt einen kleinen Vorsprung
+  bosse = [k]; bosseAmAnfang = 1;
+  truhe = null;
+  lachTon();
+  sprechblase("Gib ihn zurück!", k.x, 230, k.z);
+  zaehlerZeigen("Die Truhe lebt!");
+  tippZeigen(istTouch ? "Die Truhe lebt! Halte <b>SAUGEN</b> gedrückt und saug sie ein!"
+                      : "Die Truhe lebt! Halte die <b>Leertaste</b> gedrückt und saug sie ein!");
+}
+
+// Welches Bild gehört zu diesem Gegner?
+function bossBild(k) {
+  if (!k.truhe) return bild.koenig;
+  if (k.besiegt || k.zappeln) return bild.truheAuf;                        // beim Einsaugen reißt sie den Deckel auf
+  return Math.floor(zeit / 10) % 2 === 0 ? bild.truheAuf : bild.truheZu;   // sonst: auf, zu, auf, zu …
+}
+
+// Die Truhe, solange sie noch still dasteht
+function truheMalen() {
+  const p = aufsBild(truhe.x, 0, truhe.z);
+  if (!truhe.offen) {      // sie leuchtet, damit man hingeht
+    const puls = 1 + Math.sin(zeit * 0.1) * 0.12;
+    malen.fillStyle = "rgba(255, 211, 77, 0.45)";
+    malen.beginPath(); malen.ellipse(p.x, p.y, 95 * puls * p.groesse, 30 * puls * p.groesse, 0, 0, 6.28); malen.fill();
+  }
+  schattenMalen(truhe.x, truhe.z, 58, 0.28);
+  bildMalenAufFuessen(truhe.offen ? bild.truheAuf : bild.truheZu, p.x, p.y + 8 * p.groesse, truhe.groesse * p.groesse, false);
 }
 
 // ---- 9. Geräusche ------------------------------------------------
@@ -555,6 +682,7 @@ function kassenTon()    { for (let i = 0; i < 7; i++) piep(900 + i * 160, 900 + 
 function falschTon()    { piep(220, 170, 0.3, "sawtooth", 0, 0.18); }
 function boingTon()     { piep(160, 760, 0.18, "sine", 0, 0.3); piep(760, 380, 0.22, "sine", 0.18, 0.25); piep(380, 560, 0.2, "sine", 0.4, 0.2); }
 function plumpsTon()    { piep(200, 50, 0.4, "sine", 0, 0.35); piep(90, 40, 0.3, "square", 0.05, 0.15); }
+function klapperTon()   { piep(520, 260, 0.04, "square", 0, 0.05); }
 function bummTon()      { piep(140, 40, 0.3, "square", 0, 0.22); piep(90, 30, 0.35, "sine", 0.02, 0.3); }
 function puffTon()      { piep(500, 80, 0.25, "sawtooth", 0, 0.25); }
 function warnTon()      { piep(880, 880, 0.08, "square", 0, 0.14); piep(880, 880, 0.08, "square", 0.14, 0.14); piep(1100, 1100, 0.12, "square", 0.28, 0.14); }
@@ -712,14 +840,25 @@ function maennchenBewegen() {
       else maennchen.z = kiste.z + (dz < 0 ? -tief : tief);
     }
   }
+  // Auch um die Truhe läuft man außen herum (solange sie noch still dasteht)
+  if (truhe) {
+    const dx = maennchen.x - truhe.x, dz = maennchen.z - truhe.z;
+    const weit = Math.hypot(dx, dz);
+    if (weit < 58) {
+      maennchen.x = truhe.x + (dx / (weit || 1)) * 58;
+      maennchen.z = truhe.z + ((weit ? dz : 1) / (weit || 1)) * 58;
+    }
+  }
 
   // Staubsauger aufheben: einfach hinlaufen!
-  if (!maennchen.hatSauger && Math.hypot(maennchen.x - sauger.x, maennchen.z - sauger.z) < 70) {
+  const saugerLiegtDa = !sauger.versteckt && sauger.flug >= 1;
+  if (!maennchen.hatSauger && saugerLiegtDa && Math.hypot(maennchen.x - sauger.x, maennchen.z - sauger.z) < 70) {
     maennchen.hatSauger = true;
     aufhebTon();
     for (let i = 0; i < 14; i++) sternchen(sauger.x, 40, sauger.z, "#ffd34d");
     tippZeigen(istTouch ? "Halte <b>SAUGEN</b> gedrückt und zeig auf einen Geist!"
                         : "Halte die <b>Leertaste</b> gedrückt und zeig auf einen Geist!");
+    if (truhe) truheWirdLebendig();       // Level 5: Jetzt wacht die Truhe auf!
   }
 
   // Geld einsammeln: einfach drüberlaufen!
@@ -872,6 +1011,8 @@ function einenBossBewegen(k) {
   k.wippen = k.wippen + 0.04;
   k.zappeln = 0;
   if (k.wut > 0) k.wut = k.wut - 1;
+  // Die Truhe klappert beim Jagen mit dem Deckel – klapp, klapp, klapp
+  if (k.truhe && k.jagtGerade && !k.besiegt && zeit % 20 === 0) klapperTon();
 
   // Umgefallen: Er liegt kurz am Boden. Dann füllt sich sein neuer Balken und er steht wieder auf.
   if (k.liegt > 0) {
@@ -987,8 +1128,8 @@ function einenBossBewegen(k) {
     k.schubsPause = 100;
     k.wut = 20;
     buhTon();
-    sprechblase("BUH!", k.x, 250, k.z);
-    // In Level 2 kostet das ein Herz!
+    sprechblase(k.ruf, k.x, k.truhe ? 200 : 250, k.z);
+    // Ab Level 2 kostet das ein Herz!
     if (ZIMMER[zimmer].herzen) herzVerlieren();
   }
 }
@@ -1017,6 +1158,25 @@ function hilfeRufen(k) {
 
 // Der letzte Kronen-Geist im Zimmer ist besiegt. Was passiert jetzt?
 function alleBosseBesiegt() {
+  // Level 5, erstes Zimmer: Hier geht es der Reihe nach
+  if (zimmer === 10) {
+    if (stufe === 1) {
+      // Die Truhe ist weg – jetzt lässt sich die Kurbel am Kistenteufel drehen
+      stufe = 2;
+      kiste.gesperrt = false; kiste.bereit = true;
+      setTimeout(siegesMelodie, 300);
+      zaehlerZeigen("Truhe: eingesaugt!");
+      tippZeigen("Die Truhe ist weg! Jetzt berühr die <b>Kurbel</b> an der Kiste.");
+    } else {
+      // Der Kronen-Geist ist weg – die Tür geht auf
+      stufe = 4;
+      tuerOffen = true;
+      setTimeout(siegesMelodie, 300);
+      zaehlerZeigen("Kronen-Geist: besiegt!");
+      tippZeigen("Besiegt! Die <b>Tür hinten</b> ist offen – pass auf das Dynamit auf!");
+    }
+    return;
+  }
   if (zimmer === 2) {
     tuerOffen = true;
     setTimeout(koenigsMelodie, 300);
@@ -1081,7 +1241,9 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
   zimmer = nummer;
   tuerOffen = false;
   glitzer = []; saugStreifen = []; sprechblasen = [];
-  geister = []; bosse = []; geld = []; rechnung = null; kiste = null; kanone = null; dynamit = [];
+  geister = []; bosse = []; geld = []; rechnung = null; kiste = null; kanonen = []; dynamit = [];
+  truhe = null; stufe = 0;
+  sauger.x = 730; sauger.z = 450; sauger.versteckt = false; sauger.flug = 1;
   gefangen = 0;
   herzen = HERZEN_AM_ANFANG; unverwundbar = 0; treffBlitz = 0;
   maennchen.stossX = 0; maennchen.stossZ = 0; maennchen.schrittTakt = 0;
@@ -1197,7 +1359,7 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     maennchen.hatSauger = true;
     maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
     kisteAufstellen(560, 300, true);
-    kanoneAufstellen();
+    kanoneAufstellen("links", 150, 0, DYNAMIT_PAUSE);
     const g = kleinenGeistMachen(770, 140);
     g.jagtGerade = true; g.jagdUhr = 240; g.beissPause = 90;    // er jagt von Anfang an
     geister = [g];
@@ -1221,6 +1383,43 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     bannerZeigen("Der Blink-Geist!");
     setTimeout(() => {
       if (zimmer === 9 && bosse[0]) { lachTon(); sprechblase("Ich habe drei Balken!", bosse[0].x, 330, bosse[0].z); }
+    }, 700);
+  }
+
+  if (nummer === 10) {
+    // Level 5, erstes Zimmer – so hat Arthur es gezeichnet:
+    // in der Mitte die gelbe Truhe, hinten der Kistenteufel, links und rechts je eine Kanone.
+    // Der Staubsauger ist weg – er steckt in der Truhe!
+    maennchen.x = 450; maennchen.z = 520;
+    maennchen.hatSauger = false;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    truheAufstellen(450, 330);
+    kisteAufstellen(570, 150, false);
+    kiste.gesperrt = true;                         // die Kurbel geht erst, wenn die Truhe weg ist
+    kanoneAufstellen("links", 330, 0, 170);        // zwei Kanonen, die abwechselnd schießen
+    kanoneAufstellen("rechts", 330, 85, 170);
+    zaehlerZeigen("Wo ist der Staubsauger?");
+    tippZeigen("Dein Staubsauger ist weg! Schau mal in die <b>gelbe Truhe</b>.");
+    bannerZeigen("Level 5");
+  }
+
+  if (nummer === 11) {
+    // Level 5, zweites Zimmer: der allergrößte Geist. Er hat nur einen Balken – aber der hält lange!
+    maennchen.x = 450; maennchen.z = 540;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    bosse = [bossMachen({
+      name: "Mega-Geist", x: 450, z: 300, groesse: 390, kraftMax: 300, schwebt: 18, zMin: 300, tiefFaktor: 0.55,
+      radius: 130, reichweite: 350, zieht: 0.3, jagt: 1.0, jagdPhasen: true, dx: 0.8, dz: 0.5, stoss: 18,
+      balkenOben: true, wirdZuGeld: true,
+    })];
+    bosse[0].schubsPause = 200; bosse[0].jagdUhr = 220;     // am Anfang lässt er einem ein paar Sekunden Zeit
+    zaehlerZeigen("Mega-Geist!");
+    tippZeigen("Der <b>Mega-Geist</b> hat nur einen Balken – aber der hält ganz schön lange!");
+    bannerZeigen("Der Mega-Geist!");
+    setTimeout(() => {
+      if (zimmer === 11 && bosse[0]) { lachTon(); sprechblase("Ich bin der Allergrößte!", bosse[0].x, 330, bosse[0].z); }
     }, 700);
   }
 
@@ -1343,7 +1542,7 @@ function zimmerMalen() {
     const TH = Z.tuerHinten, hoch = TUER_HINTEN_HOEHE;
     const ecken = [[TH.von, 0, 0], [TH.bis, 0, 0], [TH.bis, hoch, 0], [TH.von, hoch, 0]];
     if (!tuerOffen || TH.zu) {
-      flaeche(ecken, "#0d0b12", 5);
+      flaeche(ecken, TH.farbe || "#0d0b12", 5);
       const klinke = aufsBild(TH.bis - 20, 85, 0);
       malen.fillStyle = "#ffd34d";
       malen.beginPath(); malen.arc(klinke.x, klinke.y, 5, 0, 6.28); malen.fill();
@@ -1554,7 +1753,7 @@ function kisteMalen() {
   schattenMalen(kiste.x + 15, kiste.z, 92, 0.28);
 
   // Die Kurbel leuchtet, solange man sie noch drehen kann
-  if (kiste.zustand === "zu" && kiste.hoch === 0) {
+  if (kiste.zustand === "zu" && kiste.hoch === 0 && !kiste.gesperrt) {
     const k = aufsBild(kiste.x + KISTE.kurbelDX + 5, 72, kiste.z);
     const puls = 1 + Math.sin(zeit * 0.12) * 0.15;
     malen.fillStyle = "rgba(255, 211, 77, 0.45)";
@@ -1582,7 +1781,10 @@ function bossMalen(k) {
   else if (k.liegt > 50) kipp = 1;
   else if (k.liegt > 0) kipp = k.liegt / 50;
 
-  const schweben = (k.schwebt + Math.sin(k.wippen) * 12) * (1 - kipp);
+  // Geister schweben und wippen – die Truhe hüpft
+  const schweben = k.truhe ? Math.abs(Math.sin(k.wippen * 4)) * 16
+                           : (k.schwebt + Math.sin(k.wippen) * 12) * (1 - kipp);
+  const b = bossBild(k);
   let zittern = k.zappeln ? zufall(-5, 5) : 0;
   let groesse = bossGroesse(k);
   if (k.besiegt && k.wirdZuGeld) {
@@ -1594,7 +1796,7 @@ function bossMalen(k) {
   schattenMalen(k.x, k.z, groesse * 0.38, 0.3);
   const p = aufsBild(k.x + zittern, schweben, k.z);
   // Ein goldenes Leuchten um ihn herum – beim Blinken leuchtet es rot
-  if (kipp === 0) {
+  if (kipp === 0 && !k.truhe) {
     malen.fillStyle = k.blinktGerade ? "rgba(255, 40, 80, " + (zeit % 8 < 4 ? 0.45 : 0.15) + ")"
                                      : "rgba(255, 211, 77, " + (0.12 + 0.06 * Math.sin(zeit * 0.1)) + ")";
     malen.beginPath(); malen.arc(p.x, p.y - groesse * p.groesse * 0.5, groesse * p.groesse * 0.55, 0, 6.28); malen.fill();
@@ -1606,10 +1808,11 @@ function bossMalen(k) {
     malen.save();
     malen.translate(p.x, p.y);
     malen.rotate(kipp * 1.45);
-    bildMalenAufFuessen(bild.koenig, 0, 0, groesse * p.groesse, false);
+    bildMalenAufFuessen(b, 0, 0, groesse * p.groesse, false);
     malen.restore();
   } else {
-    bildMalenAufFuessen(bild.koenig, p.x, p.y, groesse * p.groesse, k.dx < 0);
+    // Geister schauen dahin, wo sie hinschweben – die Truhe schaut immer zum Männchen
+    bildMalenAufFuessen(b, p.x, p.y, groesse * p.groesse, k.truhe ? maennchen.x < k.x : k.dx < 0);
   }
   malen.filter = "none";
   malen.globalAlpha = 1;
@@ -1620,19 +1823,20 @@ function bossMalen(k) {
   }
 }
 
-// Die Dynamitkanone an der linken Wand
-function kanoneMalen() {
-  const wand = aufsBild(0, 72, kanone.z);
-  const p = aufsBild(kanone.x, 72, kanone.z);
+// Eine Dynamitkanone an der Wand
+function kanoneMalen(k) {
+  const links = k.seite === "links";
+  const wand = aufsBild(links ? 0 : BREITE, 72, k.z);
+  const p = aufsBild(k.x, 72, k.z);
   const s = p.groesse * KANONE.massstab;
   // die Halterung an der Wand
   malen.fillStyle = "#111014";
-  malen.beginPath(); malen.ellipse(wand.x + 4, wand.y, 12, 30, 0, 0, 6.28); malen.fill();
+  malen.beginPath(); malen.ellipse(wand.x + (links ? 4 : -4), wand.y, 12, 30, 0, 0, 6.28); malen.fill();
   malen.strokeStyle = "#111014"; malen.lineWidth = 12;
   malen.beginPath(); malen.moveTo(wand.x, wand.y); malen.lineTo(p.x, p.y); malen.stroke();
   // Auf dem Bildschirm ist "nach vorne" etwas kürzer als "zur Seite" – darum der Faktor 0.7
-  const richtung = Math.atan2(Math.sin(kanone.winkel) * 0.7, Math.cos(kanone.winkel));
-  const zurueck = kanone.rueckstoss > 0 ? -kanone.rueckstoss * 0.8 : 0;        // sie zuckt beim Schuss zurück
+  const richtung = Math.atan2(Math.sin(k.winkel) * 0.7, Math.cos(k.winkel));
+  const zurueck = k.rueckstoss > 0 ? -k.rueckstoss * 0.8 : 0;        // sie zuckt beim Schuss zurück
   const b = bild.kanone;
   malen.save();
   malen.translate(p.x + Math.cos(richtung) * zurueck, p.y + Math.sin(richtung) * zurueck);
@@ -1640,18 +1844,18 @@ function kanoneMalen() {
   malen.drawImage(b, -KANONE.ankerX * s, -KANONE.ankerY * s, b.width * s, b.height * s);
   malen.restore();
   // das Mündungsfeuer
-  if (kanone.rueckstoss > 6) {
+  if (k.rueckstoss > 6) {
     const lang = (b.height - KANONE.ankerY) * s;
     malen.fillStyle = "rgba(255, 190, 80, 0.85)";
     malen.beginPath(); malen.arc(p.x + Math.cos(richtung) * lang, p.y + Math.sin(richtung) * lang, 22, 0, 6.28); malen.fill();
   }
   // Solange sie schläft, schnarcht sie
-  if (!kanone.wach) {
+  if (!k.wach) {
     malen.fillStyle = "#fff4fa";
     malen.font = "800 24px 'Baloo 2', sans-serif";
-    malen.textAlign = "left";
+    malen.textAlign = links ? "left" : "right";
     malen.globalAlpha = 0.6 + 0.4 * Math.sin(zeit * 0.06);
-    malen.fillText("Zzz", p.x + 20, p.y - 46 - Math.sin(zeit * 0.06) * 5);
+    malen.fillText("Zzz", p.x + (links ? 20 : -20), p.y - 46 - Math.sin(zeit * 0.06) * 5);
     malen.globalAlpha = 1;
   }
 }
@@ -1880,11 +2084,15 @@ function allesMalen() {
   for (const k of bosse) if (k.balkenOben) kraftBalkenObenMalen(k);
 
   // Der Staubsauger am Boden leuchtet, damit man ihn sieht
-  if (!maennchen.hatSauger) {
+  if (!maennchen.hatSauger && !sauger.versteckt) {
     const puls = 1 + Math.sin(zeit * 0.1) * 0.12;
-    const p = aufsBild(sauger.x, 0, sauger.z);
-    malen.fillStyle = "rgba(255, 211, 77, 0.45)";
-    malen.beginPath(); malen.ellipse(p.x, p.y, 70 * puls * p.groesse, 22 * puls * p.groesse, 0, 0, 6.28); malen.fill();
+    const boden = aufsBild(sauger.x, 0, sauger.z);
+    if (sauger.flug >= 1) {
+      malen.fillStyle = "rgba(255, 211, 77, 0.45)";
+      malen.beginPath(); malen.ellipse(boden.x, boden.y, 70 * puls * boden.groesse, 22 * puls * boden.groesse, 0, 0, 6.28); malen.fill();
+    }
+    // Springt er gerade aus der Truhe, fliegt er im hohen Bogen
+    const p = aufsBild(sauger.x, Math.sin(sauger.flug * Math.PI) * 190, sauger.z);
     bildMalenAufFuessen(bild.sauger, p.x, p.y + 4, sauger.groesse * p.groesse, false);
   }
 
@@ -1894,7 +2102,8 @@ function allesMalen() {
   for (const k of bosse) figuren.push({ z: k.z, malen: () => bossMalen(k) });
   for (const g of geld) figuren.push({ z: g.z, malen: () => geldImZimmerMalen(g) });
   if (kiste) figuren.push({ z: kiste.z, malen: kisteMalen });
-  if (kanone) figuren.push({ z: kanone.z, malen: kanoneMalen });
+  for (const k of kanonen) figuren.push({ z: k.z, malen: () => kanoneMalen(k) });
+  if (truhe) figuren.push({ z: truhe.z, malen: truheMalen });
   for (const d of dynamit) figuren.push({ z: d.z, malen: () => dynamitMalen(d) });
   figuren.push({
     z: maennchen.z,
@@ -2003,9 +2212,9 @@ function neuesSpiel(startZimmer) {
   document.getElementById("nochmal").hidden = true;
   let nummer = 1;
   // Zum Ausprobieren: Hängt man #zimmer5 an den Link, startet man gleich in Zimmer 5 (Level 3).
-  const wunsch = /^#zimmer([1-9])$/.exec(location.hash);
-  if (wunsch) nummer = Number(wunsch[1]);
-  if (startZimmer >= 1 && startZimmer <= 9) nummer = startZimmer;
+  const wunsch = /^#zimmer(\d+)$/.exec(location.hash);
+  if (wunsch && ZIMMER[Number(wunsch[1])]) nummer = Number(wunsch[1]);
+  if (ZIMMER[startZimmer]) nummer = startZimmer;
   zimmerAufbauen(nummer);
 }
 // Der Knopf am Ende von einem Level: weiter ins nächste Level – oder ganz von vorne
@@ -2030,7 +2239,7 @@ function spielSchleife() {
   if (!pause) geisterBewegen(); else saugtGerade = false;
   if (!wechselt && !pause) bosseBewegen();
   kisteBewegen();
-  if (!pause) { kanoneBewegen(); dynamitBewegen(); }
+  if (!pause) { kanonenBewegen(); dynamitBewegen(); truheBewegen(); }
   geldBewegen();
   effekteBewegen();
   saugTonAnpassen();
