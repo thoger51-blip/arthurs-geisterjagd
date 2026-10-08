@@ -9,7 +9,8 @@ import base64, pathlib
 
 HIER = pathlib.Path(__file__).parent
 BILDER = ["player_down", "player_up", "player_side", "ghost_blue", "vacuum", "ghost_boss",
-          "kiste", "teufel", "kiste_rot", "kanone", "dynamit", "truhe_zu", "truhe_auf"]
+          "kiste", "teufel", "kiste_rot", "kanone", "dynamit", "truhe_zu", "truhe_auf",
+          "kanone_spinne", "netz_knaeuel", "netz_offen"]
 
 kopf = (HIER / "kopf.html").read_text(encoding="utf-8")
 spiel = (HIER / "spiel.js").read_text(encoding="utf-8")

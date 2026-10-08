@@ -1,5 +1,5 @@
 // ================================================================
-//  ARTHURS GEISTERJAGD – Teil 9
+//  ARTHURS GEISTERJAGD – Teil 10
 //  Level 1:  Zimmer 1 – fünf kleine Geister
 //            Zimmer 2 – der Geisterkönig
 //  Level 2:  Zimmer 3 – drei Kronen-Geister (und Herzen!)
@@ -11,7 +11,11 @@
 //            Zimmer 9 – der Blink-Geist mit drei Balken
 //  Level 5:  Zimmer 10 – die lebendige Truhe, der Kistenteufel, ein Kronen-Geist und zwei Kanonen
 //            Zimmer 11 – der Mega-Geist
-//  Level 2 bis 5 hat Arthur selbst gezeichnet und erfunden.
+//  Level 6:  Zimmer 12 – die große Truhe
+//            Zimmer 13 – der Weg durch die Lava
+//            Zimmer 14 – die Spinnenkanone und zwei Kronen-Geister
+//            Zimmer 15 – der Geisterkaiser mit drei Balken
+//  Level 2 bis 6 hat Arthur selbst gezeichnet und erfunden.
 // ================================================================
 
 // ---- 0. Stellschrauben -------------------------------------------
@@ -31,6 +35,10 @@ const DYNAMIT_PAUSE = 100;      // so lange wartet die Kanone zwischen zwei Sch�
 const BLINK_DAUER = 180;        // so lange blinkt er und rast durchs Zimmer (180 = 3 Sekunden)
 const SAUG_PAUSE = 270;         // so lange ist er danach ruhig – nur dann kann man ihn saugen
 const BLINK_TEMPO = 3.3;        // so schnell rast er beim Blinken
+// Level 6: die Spinnenkanone
+const NETZ_TEMPO = 2.4;         // so schnell fliegt ein Netz
+const NETZ_PAUSE = 140;         // so lange wartet die Spinnenkanone zwischen zwei Schüssen
+const KLEBEZEIT = 180;          // so lange klebt man im Netz fest (180 = 3 Sekunden)
 
 // ---- 1. Unsere Bilder --------------------------------------------
 const BILDER = {
@@ -47,6 +55,9 @@ const BILDER = {
   dynamit: "__dynamit__",      // ein Bündel Dynamit mit brennender Zündschnur
   truheZu:  "__truhe_zu__",    // die gelbe Truhe mit Schloss (Level 5)
   truheAuf: "__truhe_auf__",   // dieselbe Truhe mit offenem Deckel
+  kanoneSpinne: "__kanone_spinne__",  // die rote Spinnenkanone (Level 6)
+  netzKnaeuel:  "__netz_knaeuel__",   // ein Netz, das noch zusammengeknüllt fliegt
+  netzOffen:    "__netz_offen__",     // das aufgegangene Netz
 };
 
 // Hier laden wir alle Bilder. Erst wenn alle fertig sind, geht's los.
@@ -115,6 +126,19 @@ const ZIMMER = {
   11: { level: 5, hinten: "#3d1420", links: "#33101b", rechts: "#2a0d16", streifen: "rgba(255,211,77,0.10)",
         tuerHinten: { von: 620, bis: 740, zu: true, farbe: "#3b82c4" },
         herzen: true, geisterBeissen: true, geisterTempo: 1.9, geld: GELD_LEVEL_3 },
+  // Level 6
+  12: { level: 6, hinten: "#5e3b1f", links: "#51331a", rechts: "#442b16", streifen: "rgba(255,211,77,0.14)",
+        tuerHinten: { von: 240, bis: 360 }, herzen: true },
+  // Der Lava-Raum: Nur auf dem Weg ist man sicher. Die Geister schubsen nur – die Lava kostet das Herz.
+  13: { level: 6, hinten: "#4a1a10", links: "#3f160d", rechts: "#36120b", streifen: "rgba(255,140,40,0.12)",
+        tuerHinten: { von: 480, bis: 600 }, herzen: true, geisterBeissen: true, geisterTempo: 1.9, nurSchubsen: true,
+        lava: true,
+        // der sichere Weg: Rechtecke [links, hinten, rechts, vorne]
+        weg: [[170, 470, 730, 560], [230, 300, 350, 480], [230, 300, 600, 390], [480, -120, 600, 390]] },
+  14: { level: 6, hinten: "#3b2a4d", links: "#33243f", rechts: "#2b1f36", streifen: "rgba(255,255,255,0.08)",
+        tuerHinten: { von: 640, bis: 760 }, herzen: true, geisterBeissen: true, geisterTempo: 1.9 },
+  15: { level: 6, hinten: "#16213e", links: "#121b33", rechts: "#0e1629", streifen: "rgba(111,211,255,0.10)",
+        herzen: true, geisterBeissen: true, geisterTempo: 1.9, kerzen: true, geld: GELD_LEVEL_3 },
 };
 let zimmer = 1;
 let tuerOffen = false;
@@ -136,6 +160,7 @@ const maennchen = {
   laeuft: false,
   hatSauger: false,
   stossX: 0, stossZ: 0,   // wenn ein Geist einen wegschubst
+  klebt: 0,               // zählt runter, solange man im Netz festklebt
 };
 
 // Wo fangen bei jedem Bild die Beine an? (0 = ganz oben, 1 = ganz unten)
@@ -351,11 +376,20 @@ function antwortGeben(nummer) {
     zaehlerZeigen(rechnung.summe + " € gewonnen!");
     tippZeigen("Richtig gerechnet! <b>Level " + ZIMMER[zimmer].level + " geschafft!</b>");
   } else {
-    // Leider falsch – einfach nochmal probieren
+    // Leider falsch! Raten gilt nicht: Dann geht es zurück in den Raum davor.
+    rechnung.phase = "falsch";
     knopf.classList.add("falsch");
-    knopf.disabled = true;
+    antwortKnoepfe.forEach((k) => { k.disabled = true; });
     falschTon();
-    tippZeigen("Fast! Zähl nochmal ganz in Ruhe nach: " + rechnung.teile.map((w) => w + " €").join(" + ") + " = ?");
+    setTimeout(verlorenTon, 300);
+    zaehlerZeigen("Leider falsch!");
+    tippZeigen("Leider falsch – richtig wären <b>" + rechnung.summe + " €</b>. Zurück in den Raum davor!");
+    bannerZeigen("Leider falsch!");
+    const zurueck = zimmer - 1;
+    setTimeout(() => {
+      document.getElementById("antworten").hidden = true;
+      zimmerWechseln(zurueck, "Rechne beim nächsten Mal ganz in Ruhe nach – du schaffst das!");
+    }, 2800);
   }
 }
 
@@ -484,15 +518,23 @@ function kisteBewegen() {
 let kanonen = [];
 let dynamit = [];
 // Wo im Bild die wichtigen Stellen sind (gemessen an den Bildern)
-const KANONE = { massstab: 0.8, ankerX: 46.4, ankerY: 79, winkel0: 1.4407, rohr: 175 };
+//   anker = um diesen Punkt dreht sie sich · winkel0 = in diese Richtung zeigt das Rohr im Bild
+//   rohr = so weit vorne kommt das Geschoss heraus · abstand = so weit steht sie von der Wand weg
+const KANONEN_ARTEN = {
+  dynamit: { bild: "kanone",       massstab: 0.8, ankerX: 46.4,  ankerY: 79,   winkel0: 1.4407, muendung: 239, rohr: 175, abstand: 50,  schwenk: 0.72 },
+  netz:    { bild: "kanoneSpinne", massstab: 1.0, ankerX: 105.6, ankerY: 70.2, winkel0: 0,      muendung: 109, rohr: 115, abstand: 125, schwenk: 0.55 },
+};
 const DYNAMIT = { massstab: 0.9, ankerX: 21.2, ankerY: 45.9, winkel0: 1.408 };
 
 // seite: "links" oder "rechts" · z: wie weit hinten · vorlauf: damit zwei Kanonen nicht gleichzeitig schießen
-function kanoneAufstellen(seite, z, vorlauf, pause) {
+// art: "dynamit" oder "netz" (die Spinnenkanone)
+function kanoneAufstellen(seite, z, vorlauf, pause, art) {
+  art = art || "dynamit";
+  const A = KANONEN_ARTEN[art];
   const grund = seite === "links" ? 0 : Math.PI;      // ihre Grundrichtung: quer durchs Zimmer zur anderen Wand
   kanonen.push({
-    seite,
-    x: seite === "links" ? 50 : BREITE - 50, z,
+    seite, art,
+    x: seite === "links" ? A.abstand : BREITE - A.abstand, z,
     grund,
     winkel: grund,            // wohin sie gerade zielt
     zeit: vorlauf,
@@ -514,47 +556,76 @@ function kanonenBewegen() {
     if (!k.wach || wechselt || geschafft) continue;
     // Sie schwenkt langsam im Halbkreis hin und her
     k.zeit = k.zeit + 1;
-    k.winkel = k.grund + Math.asin(Math.sin(k.zeit * 0.012)) * 0.72;      // gleichmäßig 65° nach beiden Seiten
+    const A = KANONEN_ARTEN[k.art];
+    k.winkel = k.grund + Math.asin(Math.sin(k.zeit * 0.012)) * A.schwenk;      // gleichmäßig nach beiden Seiten
     k.schussUhr = k.schussUhr - 1;
     if (k.schussUhr <= 0) {
       k.schussUhr = k.pause;
       k.rueckstoss = 12;
-      bummTon();
+      if (k.art === "netz") pflatschTon(); else bummTon();
       const richtX = Math.cos(k.winkel), richtZ = Math.sin(k.winkel);
+      const tempo = k.art === "netz" ? NETZ_TEMPO : DYNAMIT_TEMPO;
       dynamit.push({
-        x: k.x + richtX * KANONE.rohr, z: k.z + richtZ * KANONE.rohr,
-        dx: richtX * DYNAMIT_TEMPO, dz: richtZ * DYNAMIT_TEMPO,
+        art: k.art,               // Dynamit oder Netz
+        x: k.x + richtX * A.rohr, z: k.z + richtZ * A.rohr,
+        dx: richtX * tempo, dz: richtZ * tempo,
         wackeln: zufall(0, 6.28),
+        alter: 0,                 // ein Netz geht erst nach einer Weile auf
       });
     }
   }
 }
+
+// Wie weit muss ein Geschoss vom Männchen weg sein, damit es nicht trifft?
+const NETZ_AUF = 38;      // nach so vielen Bildern geht das Netz auf
 
 function dynamitBewegen() {
   for (const d of dynamit) {
     d.x = d.x + d.dx;
     d.z = d.z + d.dz;
     d.wackeln = d.wackeln + 0.2;
-    if (zeit % 4 === 0) glitzer.push({ x: d.x, y: 55, z: d.z, dx: zufall(-1, 1), dy: zufall(0, 2), dz: zufall(-1, 1), leben: 14, farbe: "#ffb347" });
-    // Getroffen? Das kostet ein Herz.
+    d.alter = d.alter + 1;
+    const netz = d.art === "netz";
+    if (!netz && zeit % 4 === 0) glitzer.push({ x: d.x, y: 55, z: d.z, dx: zufall(-1, 1), dy: zufall(0, 2), dz: zufall(-1, 1), leben: 14, farbe: "#ffb347" });
+    // Getroffen?
     const zumMaennchen = Math.hypot(maennchen.x - d.x, maennchen.z - d.z);
-    if (zumMaennchen < 42 && unverwundbar === 0 && !wechselt) {
-      d.weg = true;
-      const weit = zumMaennchen || 1;
-      maennchen.stossX = ((maennchen.x - d.x) / weit) * 9;
-      maennchen.stossZ = ((maennchen.z - d.z) / weit) * 9;
-      for (let i = 0; i < 16; i++) sternchen(d.x, 60, d.z, i % 2 ? "#ffb347" : "#ff5a5a");
-      puffTon();
-      sprechblase("PENG!", d.x, 170, d.z);
-      herzVerlieren();
+    const trefferWeite = netz ? (d.alter < NETZ_AUF ? 36 : 60) : 42;      // ein offenes Netz ist breiter
+    if (zumMaennchen < trefferWeite && unverwundbar === 0 && !wechselt) {
+      if (netz) {
+        // Ein Netz kostet kein Herz – aber man klebt fest!
+        if (maennchen.klebt === 0) {
+          d.weg = true;
+          festkleben();
+        }
+      } else {
+        // Dynamit kostet ein Herz
+        d.weg = true;
+        const weit = zumMaennchen || 1;
+        maennchen.stossX = ((maennchen.x - d.x) / weit) * 9;
+        maennchen.stossZ = ((maennchen.z - d.z) / weit) * 9;
+        for (let i = 0; i < 16; i++) sternchen(d.x, 60, d.z, i % 2 ? "#ffb347" : "#ff5a5a");
+        puffTon();
+        sprechblase("PENG!", d.x, 170, d.z);
+        herzVerlieren();
+      }
     }
     // An der Wand verpufft es einfach – ohne Loch im Boden
     if (d.x > BREITE - 20 || d.x < 15 || d.z < 12 || d.z > TIEFE - 8) {
       d.weg = true;
-      for (let i = 0; i < 8; i++) sternchen(d.x, 60, d.z, "#c9b8c2");
+      for (let i = 0; i < 8; i++) sternchen(d.x, 60, d.z, netz ? "#f4f6ff" : "#c9b8c2");
     }
   }
   dynamit = dynamit.filter((d) => !d.weg);
+}
+
+// Im Netz gefangen: Drei Sekunden lang kann man sich nicht bewegen und nicht saugen.
+function festkleben() {
+  maennchen.klebt = KLEBEZEIT;
+  maennchen.stossX = 0; maennchen.stossZ = 0;
+  pflatschTon();
+  for (let i = 0; i < 14; i++) sternchen(maennchen.x, 90, maennchen.z, "#f4f6ff");
+  sprechblase("Ich klebe fest!", maennchen.x, 230, maennchen.z);
+  tippZeigen("Du klebst im <b>Netz</b> fest! Gleich bist du wieder frei …");
 }
 
 // ---- 8d. Die Truhe (Level 5) ----------------------------------------
@@ -566,8 +637,9 @@ let truhe = null;
 //   3 = Kronen-Geist einsaugen               4 = die Tür ist offen
 let stufe = 0;
 
-function truheAufstellen(x, z) {
-  truhe = { x, z, groesse: 165, offen: false };
+// groesse, jagt (wie schnell sie jagt) und kraft (wie lang ihr Balken ist) kann man einstellen
+function truheAufstellen(x, z, groesse, jagt, kraft) {
+  truhe = { x, z, groesse: groesse || 165, jagt: jagt || 1.25, kraft: kraft || 100, offen: false };
 }
 
 function truheBewegen() {
@@ -579,14 +651,14 @@ function truheBewegen() {
   }
   if (!truhe || truhe.offen || wechselt) return;
   // Kommt das Männchen nah heran, klappt der Deckel auf
-  if (Math.hypot(maennchen.x - truhe.x, maennchen.z - truhe.z) < 125) {
+  if (Math.hypot(maennchen.x - truhe.x, maennchen.z - truhe.z) < 125 * truhe.groesse / 165) {
     truhe.offen = true;
     boingTon();
     for (let i = 0; i < 20; i++) sternchen(truhe.x + zufall(-30, 30), zufall(120, 200), truhe.z, "#ffd34d");
     sauger.versteckt = false; sauger.flug = 0;
     sauger.startX = truhe.x; sauger.startZ = truhe.z;
     // Er landet ein Stück neben der Truhe – auf der Seite, wo das Männchen nicht steht
-    sauger.zielX = truhe.x + (maennchen.x < truhe.x ? 170 : -170);
+    sauger.zielX = truhe.x + (maennchen.x < truhe.x ? 1 : -1) * 170 * truhe.groesse / 165;
     sauger.zielZ = truhe.z + 80;
     sauger.x = sauger.startX; sauger.z = sauger.startZ;
     zaehlerZeigen("Da ist er!");
@@ -598,8 +670,9 @@ function truheBewegen() {
 function truheWirdLebendig() {
   stufe = 1;
   const k = bossMachen({
-    name: "Truhe", x: truhe.x, z: truhe.z, groesse: truhe.groesse, kraftMax: 100,
-    truhe: true, schwebt: 0, radius: 62, jagt: 1.25, jagdPhasen: true, dx: 0.6, dz: 0.4, stoss: 12, ruf: "HAPPS!",
+    name: "Truhe", x: truhe.x, z: truhe.z, groesse: truhe.groesse, kraftMax: truhe.kraft,
+    truhe: true, schwebt: 0, radius: 62 * truhe.groesse / 165, jagt: truhe.jagt, jagdPhasen: true,
+    dx: 0.6, dz: 0.4, stoss: 12, ruf: "HAPPS!",
   });
   k.jagtGerade = true; k.jagdUhr = 200;    // sie legt sofort los …
   k.schubsPause = 80;                      // … aber man bekommt einen kleinen Vorsprung
@@ -682,6 +755,8 @@ function kassenTon()    { for (let i = 0; i < 7; i++) piep(900 + i * 160, 900 + 
 function falschTon()    { piep(220, 170, 0.3, "sawtooth", 0, 0.18); }
 function boingTon()     { piep(160, 760, 0.18, "sine", 0, 0.3); piep(760, 380, 0.22, "sine", 0.18, 0.25); piep(380, 560, 0.2, "sine", 0.4, 0.2); }
 function plumpsTon()    { piep(200, 50, 0.4, "sine", 0, 0.35); piep(90, 40, 0.3, "square", 0.05, 0.15); }
+function zischTon()     { piep(1400, 300, 0.5, "sawtooth", 0, 0.12); piep(700, 120, 0.4, "square", 0.05, 0.08); }
+function pflatschTon()  { piep(240, 120, 0.15, "sine", 0, 0.25); piep(500, 300, 0.1, "triangle", 0.05, 0.12); }
 function klapperTon()   { piep(520, 260, 0.04, "square", 0, 0.05); }
 function bummTon()      { piep(140, 40, 0.3, "square", 0, 0.22); piep(90, 30, 0.35, "sine", 0.02, 0.3); }
 function puffTon()      { piep(500, 80, 0.25, "sawtooth", 0, 0.25); }
@@ -779,6 +854,19 @@ antwortKnoepfe.forEach((knopf, i) => knopf.addEventListener("click", () => { ton
 // ---- 11. Das Männchen bewegen ---------------------------------------
 function maennchenBewegen() {
   const Z = ZIMMER[zimmer];
+  // Im Netz gefangen? Dann geht drei Sekunden lang gar nichts.
+  if (maennchen.klebt > 0) {
+    maennchen.klebt = maennchen.klebt - 1;
+    maennchen.laeuft = false;
+    maennchen.schrittTakt = maennchen.schrittTakt * 0.8;
+    maennchen.stossX = 0; maennchen.stossZ = 0;
+    if (unverwundbar > 0) unverwundbar = unverwundbar - 1;
+    if (maennchen.klebt === 0) {
+      for (let i = 0; i < 12; i++) sternchen(maennchen.x, 90, maennchen.z, "#f4f6ff");
+      tippZeigen("Frei! Pass auf die <b>Netze</b> auf!");
+    }
+    return;
+  }
   let schrittX = 0, schrittZ = 0;
   if (gedrueckt.links)  schrittX = schrittX - 1;
   if (gedrueckt.rechts) schrittX = schrittX + 1;
@@ -831,6 +919,9 @@ function maennchenBewegen() {
   maennchen.x = Math.max(40, Math.min(rechterRand, maennchen.x));
   maennchen.z = Math.max(hintererRand, Math.min(TIEFE - 10, maennchen.z));
 
+  // Lava! Wer vom Weg abkommt, verbrennt sich die Füße.
+  if (Z.lava && !wechselt && !aufDemWeg(maennchen.x, maennchen.z)) inDieLava();
+
   // Um die Kiste muss man außen herumlaufen
   if (kiste) {
     const dx = maennchen.x - kiste.x, dz = maennchen.z - kiste.z;
@@ -843,10 +934,10 @@ function maennchenBewegen() {
   // Auch um die Truhe läuft man außen herum (solange sie noch still dasteht)
   if (truhe) {
     const dx = maennchen.x - truhe.x, dz = maennchen.z - truhe.z;
-    const weit = Math.hypot(dx, dz);
-    if (weit < 58) {
-      maennchen.x = truhe.x + (dx / (weit || 1)) * 58;
-      maennchen.z = truhe.z + ((weit ? dz : 1) / (weit || 1)) * 58;
+    const weit = Math.hypot(dx, dz), platz = 58 * truhe.groesse / 165;
+    if (weit < platz) {
+      maennchen.x = truhe.x + (dx / (weit || 1)) * platz;
+      maennchen.z = truhe.z + ((weit ? dz : 1) / (weit || 1)) * platz;
     }
   }
 
@@ -894,6 +985,27 @@ function herzVerlieren() {
 }
 
 // ---- 12. Saugen ----------------------------------------------------
+// Steht man auf dem sicheren Weg? (Ein kleines bisschen Rand verzeihen wir.)
+function aufDemWeg(x, z) {
+  const rand = 14;
+  for (const [x1, z1, x2, z2] of ZIMMER[zimmer].weg) {
+    if (x > x1 - rand && x < x2 + rand && z > z1 - rand && z < z2 + rand) return true;
+  }
+  return false;
+}
+
+// In die Lava getreten: Autsch! Zurück an den Anfang vom Weg – und ein Herz ist weg.
+function inDieLava() {
+  for (let i = 0; i < 24; i++) sternchen(maennchen.x + zufall(-20, 20), zufall(20, 120), maennchen.z, i % 2 ? "#ffb347" : "#ff3b1f");
+  zischTon();
+  sprechblase("Heiß! Heiß!", maennchen.x, 220, maennchen.z);
+  maennchen.x = 450; maennchen.z = 520;
+  maennchen.stossX = 0; maennchen.stossZ = 0;
+  maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+  if (unverwundbar === 0) herzVerlieren();
+  if (herzen > 0) tippZeigen("Autsch, die <b>Lava</b>! Bleib auf dem Weg.");
+}
+
 // Wo ist die Öffnung vom Staubsauger-Rohr?
 function duesenPunkt() {
   const daneben = Math.abs(maennchen.richtungX) < 0.5 ? 40 : 0;
@@ -921,7 +1033,7 @@ function zumRohrZiehen(ding, staerke) {
 
 // ---- 13. Geister und Geld bewegen -----------------------------------
 function geisterBewegen() {
-  saugtGerade = maennchen.hatSauger && gedrueckt.saugen && !geschafft && !wechselt;
+  saugtGerade = maennchen.hatSauger && gedrueckt.saugen && !geschafft && !wechselt && !(maennchen.klebt > 0);
   const boese = ZIMMER[zimmer].geisterBeissen;      // in Level 3 nehmen auch kleine Geister Herzen weg
 
   for (const g of geister) {
@@ -970,13 +1082,18 @@ function geisterBewegen() {
     const zumMaennchen = Math.hypot(maennchen.x - g.x, maennchen.z - g.z);
     if (boese && zumMaennchen < 50 && g.beissPause === 0 && unverwundbar === 0 && !wechselt) {
       const weit = zumMaennchen || 1;
-      maennchen.stossX = ((maennchen.x - g.x) / weit) * 10;
-      maennchen.stossZ = ((maennchen.z - g.z) / weit) * 10;
+      const stoss = ZIMMER[zimmer].nurSchubsen ? 13 : 10;      // im Lava-Raum schubsen sie kräftiger
+      maennchen.stossX = ((maennchen.x - g.x) / weit) * stoss;
+      maennchen.stossZ = ((maennchen.z - g.z) / weit) * stoss;
       g.beissPause = 100;
       g.jagtGerade = false; g.jagdUhr = 140;      // danach lässt er erst mal von einem ab
       buhTon();
-      sprechblase("Buh!", g.x, 190, g.z);
-      herzVerlieren();
+      if (ZIMMER[zimmer].nurSchubsen) {
+        sprechblase("Schubs!", g.x, 190, g.z);     // Schubsen kostet kein Herz – aber die Lava!
+      } else {
+        sprechblase("Buh!", g.x, 190, g.z);
+        herzVerlieren();
+      }
     }
   }
   geister = geister.filter((g) => !g.weg);
@@ -1002,7 +1119,7 @@ function bosseBewegen() {
   for (const k of bosse) einenBossBewegen(k);
   bosse = bosse.filter((k) => !k.weg);
   if (bosse.length < vorher) {
-    if (zimmer === 3) zaehlerZeigen("Kronen-Geister: " + (bosseAmAnfang - bosse.length) + " von " + bosseAmAnfang);
+    if (zimmer === 3 || zimmer === 14) zaehlerZeigen("Kronen-Geister: " + (bosseAmAnfang - bosse.length) + " von " + bosseAmAnfang);
     if (bosse.length === 0) alleBosseBesiegt();
   }
 }
@@ -1182,11 +1299,13 @@ function alleBosseBesiegt() {
     setTimeout(koenigsMelodie, 300);
     zaehlerZeigen("Geisterkönig: besiegt!");
     tippZeigen("Du hast den <b>Geisterkönig</b> besiegt! Die Tür ist offen – auf zu Level 2!");
-  } else if (zimmer === 3 || zimmer === 6) {
+  } else if (zimmer === 3 || zimmer === 6 || zimmer === 12 || zimmer === 14) {
     tuerOffen = true;
     setTimeout(siegesMelodie, 300);
     if (zimmer === 6) zaehlerZeigen("Kronen-Geist: besiegt!");
-    tippZeigen((zimmer === 3 ? "Alle drei besiegt!" : "Besiegt!") + " Die <b>Tür hinten</b> ist offen!");
+    if (zimmer === 12) zaehlerZeigen("Truhe: eingesaugt!");
+    const geschafftText = { 3: "Alle drei besiegt!", 6: "Besiegt!", 12: "Die Truhe ist eingesaugt!", 14: "Beide besiegt!" };
+    tippZeigen(geschafftText[zimmer] + " Die <b>Tür hinten</b> ist offen!");
   } else if (ZIMMER[zimmer].geld) {
     // Die kleinen Helfer-Geister verpuffen …
     for (const g of geister) for (let i = 0; i < 6; i++) sternchen(g.x, 50, g.z, "#6fd3ff");
@@ -1246,7 +1365,7 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
   sauger.x = 730; sauger.z = 450; sauger.versteckt = false; sauger.flug = 1;
   gefangen = 0;
   herzen = HERZEN_AM_ANFANG; unverwundbar = 0; treffBlitz = 0;
-  maennchen.stossX = 0; maennchen.stossZ = 0; maennchen.schrittTakt = 0;
+  maennchen.stossX = 0; maennchen.stossZ = 0; maennchen.schrittTakt = 0; maennchen.klebt = 0;
   document.getElementById("antworten").hidden = true;
 
   if (nummer === 1) {
@@ -1423,10 +1542,72 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     }, 700);
   }
 
+  if (nummer === 12) {
+    // Level 6, erstes Zimmer: nur die Truhe – aber sie ist größer und schneller als in Level 5.
+    maennchen.x = 450; maennchen.z = 530;
+    maennchen.hatSauger = false;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    truheAufstellen(450, 300, 215, 1.65, 120);
+    zaehlerZeigen("Wo ist der Staubsauger?");
+    tippZeigen("Der Staubsauger steckt wieder in der <b>Truhe</b>. Aber Achtung – sie ist größer geworden!");
+    bannerZeigen("Level 6");
+  }
+
+  if (nummer === 13) {
+    // Level 6, zweites Zimmer: der Weg durch die Lava. Die Tür ist offen – man muss nur heil hinkommen.
+    maennchen.x = 450; maennchen.z = 520;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    tuerOffen = true;
+    const a = kleinenGeistMachen(130, 110), b = kleinenGeistMachen(770, 110);
+    a.beissPause = 120; b.beissPause = 120;
+    geister = [a, b];
+    zaehlerZeigen("Lava!");
+    tippZeigen("Bleib auf dem <b>Weg</b>! Die Geister wollen dich in die Lava schubsen.");
+    bannerZeigen("Die Lava!");
+  }
+
+  if (nummer === 14) {
+    // Level 6, drittes Zimmer: die Spinnenkanone und zwei Kronen-Geister.
+    maennchen.x = 450; maennchen.z = 520;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    kanoneAufstellen("links", 300, 0, NETZ_PAUSE, "netz");
+    kanonen[0].wach = true; kanonen[0].schussUhr = 120;     // sie ist sofort wach
+    bosse = [
+      bossMachen({ name: "Kronen-Geist", x: 300, z: 150, groesse: 190, kraftMax: 100, radius: 64, jagt: 1.35, jagdPhasen: true, dx: 0.9, dz: 0.6 }),
+      bossMachen({ name: "Kronen-Geist", x: 680, z: 150, groesse: 190, kraftMax: 100, radius: 64, jagt: 1.35, jagdPhasen: true, dx: -0.8, dz: 0.5 }),
+    ];
+    zaehlerZeigen("Kronen-Geister: 0 von 2");
+    tippZeigen("Vorsicht, die <b>Spinnenkanone</b>! Wer vom Netz getroffen wird, klebt fest.");
+    bannerZeigen("Die Spinnenkanone!");
+  }
+
+  if (nummer === 15) {
+    // Level 6, letztes Zimmer: der Geisterkaiser – drei Balken und schneller als alle vor ihm.
+    maennchen.x = 450; maennchen.z = 540;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    bosse = [bossMachen({
+      name: "Geisterkaiser", x: 450, z: 300, groesse: 390, kraftMax: 110, leben: 3, schwebt: 18, zMin: 300, tiefFaktor: 0.55,
+      radius: 130, reichweite: 350, zieht: 0.3, jagt: 1.4, jagdPhasen: true, dx: 0.9, dz: 0.6, stoss: 18,
+      balkenOben: true, wirdZuGeld: true,
+    })];
+    bosse[0].schubsPause = 200; bosse[0].jagdUhr = 220;     // am Anfang lässt er einem ein paar Sekunden Zeit
+    zaehlerZeigen("Geisterkaiser!");
+    tippZeigen("Der <b>Geisterkaiser</b> hat drei Balken – du musst ihn dreimal besiegen!");
+    bannerZeigen("Der Geisterkaiser!");
+    setTimeout(() => {
+      if (zimmer === 15 && bosse[0]) { lachTon(); sprechblase("Ich bin der Kaiser aller Geister!", bosse[0].x, 330, bosse[0].z); }
+    }, 700);
+  }
+
   bosseAmAnfang = bosse.length;
   if (nochmalVersuchen) {
     bannerZeigen("Nochmal!");
-    tippZeigen("Erwischt! Gleich nochmal – du schaffst das!");
+    // nochmalVersuchen kann auch ein eigener Text sein (zum Beispiel nach einer falschen Antwort)
+    tippZeigen(typeof nochmalVersuchen === "string" ? nochmalVersuchen : "Erwischt! Gleich nochmal – du schaffst das!");
   }
 }
 
@@ -1575,6 +1756,8 @@ function zimmerMalen() {
     if ((z / 56) % 2 === 1) flaeche([[0, 0, z], [B, 0, z], [B, 0, z + 56], [0, 0, z + 56]], "rgba(255,255,255,0.06)");
     linie([0, 0, z], [B, 0, z], "rgba(120, 20, 70, 0.25)", 1.5);
   }
+  // Lava mit einem schmalen Weg
+  if (Z.lava) lavaMalen(Z);
   // Ein roter Teppich
   if (Z.teppich) {
     flaeche([[200, 0, 120], [700, 0, 120], [700, 0, 470], [200, 0, 470]], "#c2185b", 4);
@@ -1621,6 +1804,29 @@ function zimmerMalen() {
              [mitte + 48, 0, 120 + w], [mitte, 0, 50 + w], [mitte - 48, 0, 120 + w],
              [mitte - 22, 0, 120 + w]], "#ffd34d");
     malen.globalAlpha = 1;
+  }
+}
+
+// Die blubbernde Lava – und darauf der pinke Weg
+function lavaMalen(Z) {
+  const B = BREITE, T = TIEFE;
+  flaeche([[0, 0, 0], [B, 0, 0], [B, 0, T], [0, 0, T]], "#e8410f");
+  for (let i = 0; i < 28; i++) {
+    const x = (i * 137) % B + Math.sin(zeit * 0.02 + i) * 20;
+    const z = (i * 89) % T;
+    const r = 20 + 10 * Math.sin(zeit * 0.05 + i * 1.7);
+    const p = aufsBild(x, 0, z);
+    malen.fillStyle = i % 3 ? "rgba(255, 170, 40, 0.55)" : "rgba(255, 235, 130, 0.6)";
+    malen.beginPath(); malen.ellipse(p.x, p.y, r * p.groesse * 1.6, r * p.groesse * 0.5, 0, 0, 6.28); malen.fill();
+  }
+  // erst ein dunkler Rand, dann der Weg darauf
+  for (const [x1, z1, x2, z2] of Z.weg) {
+    const a = Math.max(0, z1 - 9);
+    flaeche([[x1 - 9, 0, a], [x2 + 9, 0, a], [x2 + 9, 0, z2 + 9], [x1 - 9, 0, z2 + 9]], "#3a1208");
+  }
+  for (const [x1, z1, x2, z2] of Z.weg) {
+    const a = Math.max(0, z1);
+    flaeche([[x1, 0, a], [x2, 0, a], [x2, 0, z2], [x1, 0, z2]], "#ff69b4");
   }
 }
 
@@ -1704,6 +1910,23 @@ function maennchenMalen() {
   malen.restore();
 
   malen.restore();
+}
+
+// Das Netz, in dem das Männchen festklebt
+function netzUeberMaennchenMalen() {
+  const p = aufsBild(maennchen.x, 0, maennchen.z);
+  const b = bild.netzOffen;
+  const breite = 150 * p.groesse, hoehe = breite * b.height / b.width;
+  const zappeln = Math.sin(zeit * 0.6) * 0.06;
+  malen.save();
+  malen.translate(p.x, p.y - maennchen.groesse * p.groesse * 0.55);
+  malen.rotate(Math.PI + zappeln);           // umgedreht: wie ein Netz, das über ihn geworfen wurde
+  malen.drawImage(b, -breite / 2, -hoehe / 2, breite, hoehe);
+  malen.restore();
+  // ein kleiner Ring zeigt, wie lange es noch dauert
+  const ring = aufsBild(maennchen.x, maennchen.groesse + 40, maennchen.z);
+  malen.strokeStyle = "#f4f6ff"; malen.lineWidth = 6;
+  malen.beginPath(); malen.arc(ring.x, ring.y, 16, -Math.PI / 2, -Math.PI / 2 + 6.283 * maennchen.klebt / KLEBEZEIT); malen.stroke();
 }
 
 // Der Staubsauger in der Hand
@@ -1823,12 +2046,13 @@ function bossMalen(k) {
   }
 }
 
-// Eine Dynamitkanone an der Wand
+// Eine Kanone an der Wand
 function kanoneMalen(k) {
+  const A = KANONEN_ARTEN[k.art];
   const links = k.seite === "links";
   const wand = aufsBild(links ? 0 : BREITE, 72, k.z);
   const p = aufsBild(k.x, 72, k.z);
-  const s = p.groesse * KANONE.massstab;
+  const s = p.groesse * A.massstab;
   // die Halterung an der Wand
   malen.fillStyle = "#111014";
   malen.beginPath(); malen.ellipse(wand.x + (links ? 4 : -4), wand.y, 12, 30, 0, 0, 6.28); malen.fill();
@@ -1837,16 +2061,16 @@ function kanoneMalen(k) {
   // Auf dem Bildschirm ist "nach vorne" etwas kürzer als "zur Seite" – darum der Faktor 0.7
   const richtung = Math.atan2(Math.sin(k.winkel) * 0.7, Math.cos(k.winkel));
   const zurueck = k.rueckstoss > 0 ? -k.rueckstoss * 0.8 : 0;        // sie zuckt beim Schuss zurück
-  const b = bild.kanone;
+  const b = bild[A.bild];
   malen.save();
   malen.translate(p.x + Math.cos(richtung) * zurueck, p.y + Math.sin(richtung) * zurueck);
-  malen.rotate(richtung - KANONE.winkel0);
-  malen.drawImage(b, -KANONE.ankerX * s, -KANONE.ankerY * s, b.width * s, b.height * s);
+  malen.rotate(richtung - A.winkel0);
+  malen.drawImage(b, -A.ankerX * s, -A.ankerY * s, b.width * s, b.height * s);
   malen.restore();
   // das Mündungsfeuer
   if (k.rueckstoss > 6) {
-    const lang = (b.height - KANONE.ankerY) * s;
-    malen.fillStyle = "rgba(255, 190, 80, 0.85)";
+    const lang = A.muendung * s;
+    malen.fillStyle = k.art === "netz" ? "rgba(244, 246, 255, 0.85)" : "rgba(255, 190, 80, 0.85)";
     malen.beginPath(); malen.arc(p.x + Math.cos(richtung) * lang, p.y + Math.sin(richtung) * lang, 22, 0, 6.28); malen.fill();
   }
   // Solange sie schläft, schnarcht sie
@@ -1858,6 +2082,28 @@ function kanoneMalen(k) {
     malen.fillText("Zzz", p.x + (links ? 20 : -20), p.y - 46 - Math.sin(zeit * 0.06) * 5);
     malen.globalAlpha = 1;
   }
+}
+
+// Ein fliegendes Netz: erst ein dünnes Knäuel, dann geht es auf
+const KNAEUEL_WINKEL = 2.627;     // in diese Richtung zeigt die Spitze im Bild
+function netzMalen(d) {
+  const p = aufsBild(d.x, 60, d.z);
+  const richtung = Math.atan2(d.dz * 0.7, d.dx);
+  schattenMalen(d.x, d.z, d.alter < NETZ_AUF ? 20 : 40, 0.2);
+  malen.save();
+  malen.translate(p.x, p.y);
+  if (d.alter < NETZ_AUF) {
+    const b = bild.netzKnaeuel, breite = 80 * p.groesse, hoehe = breite * b.height / b.width;
+    malen.rotate(richtung - KNAEUEL_WINKEL);
+    malen.drawImage(b, -breite / 2, -hoehe / 2, breite, hoehe);
+  } else {
+    // Das Netz geht auf: Es wird schnell größer, die Öffnung zeigt nach vorne
+    const auf = Math.min(1, (d.alter - NETZ_AUF) / 12);
+    const b = bild.netzOffen, breite = (50 + 80 * auf) * p.groesse, hoehe = breite * b.height / b.width;
+    malen.rotate(richtung + Math.PI / 2 + Math.sin(d.wackeln) * 0.08);
+    malen.drawImage(b, -breite / 2, -hoehe * 0.55, breite, hoehe);
+  }
+  malen.restore();
 }
 
 // Ein fliegendes Dynamit-Bündel
@@ -2104,7 +2350,7 @@ function allesMalen() {
   if (kiste) figuren.push({ z: kiste.z, malen: kisteMalen });
   for (const k of kanonen) figuren.push({ z: k.z, malen: () => kanoneMalen(k) });
   if (truhe) figuren.push({ z: truhe.z, malen: truheMalen });
-  for (const d of dynamit) figuren.push({ z: d.z, malen: () => dynamitMalen(d) });
+  for (const d of dynamit) figuren.push({ z: d.z, malen: () => (d.art === "netz" ? netzMalen(d) : dynamitMalen(d)) });
   figuren.push({
     z: maennchen.z,
     malen: () => {
@@ -2114,6 +2360,7 @@ function allesMalen() {
       if (unverwundbar > 0 && Math.floor(zeit / 5) % 2 === 0) malen.globalAlpha = 0.3;
       if (saugerHinten) saugerInDerHandMalen();
       maennchenMalen();
+      if (maennchen.klebt > 0) netzUeberMaennchenMalen();
       if (maennchen.hatSauger && !saugerHinten) saugerInDerHandMalen();
       malen.globalAlpha = 1;
     },
