@@ -63,6 +63,34 @@
   @keyframes wackeln { 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
   @media (prefers-reduced-motion: reduce) { .antwort.falsch { animation: none; } }
 
+  /* Der Level-Knopf oben rechts im Zimmer und die Level-Auswahl */
+  .levelknopf {
+    position: absolute; top: 8px; right: 8px; z-index: 3;
+    font: 800 17px var(--schrift); color: var(--gold); background: rgba(17, 16, 20, .78);
+    border: 2px solid var(--gold); border-radius: 999px; padding: 2px 14px; cursor: pointer;
+    touch-action: manipulation;
+  }
+  .levelknopf:focus-visible, .levelwahl button:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
+  .levelwahl {
+    position: absolute; inset: 0; z-index: 4; border-radius: 6px;
+    background: rgba(17, 16, 20, .88);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(10px, 3vh, 22px);
+  }
+  .levelwahl[hidden] { display: none; }
+  .levelwahl h2 { margin: 0; font-size: clamp(24px, 5vw, 40px); font-weight: 800; }
+  .levelreihe { display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(8px, 2vw, 16px); max-width: 92%; }
+  .levelreihe button {
+    font: 800 clamp(26px, 5.5vw, 44px) var(--schrift); font-variant-numeric: tabular-nums;
+    width: clamp(58px, 11vw, 96px); aspect-ratio: 1; padding: 0;
+    color: var(--schwarz); background: var(--gold); border: 0; border-radius: 18px;
+    box-shadow: 0 5px 0 #b8871a; cursor: pointer; touch-action: manipulation;
+  }
+  .levelreihe button.jetzt { background: var(--rosa); box-shadow: 0 5px 0 #b83f81; }
+  .levelzu {
+    font: 800 20px var(--schrift); color: var(--text); background: transparent;
+    border: 2px solid var(--text); border-radius: 999px; padding: 4px 22px; cursor: pointer; touch-action: manipulation;
+  }
+
   /* ---- Steuerung fürs Handy und Tablet (am Computer unsichtbar) ---- */
   .steuerung { display: none; width: 100%; align-items: stretch; gap: 16px; }
   .joyfeld { position: relative; flex: 1; min-height: 170px; touch-action: none; }
@@ -128,6 +156,12 @@
     <button class="antwort" id="antwort3"></button>
   </div>
   <button class="nochmal" id="nochmal" hidden>Nochmal spielen</button>
+  <button class="levelknopf" id="levelknopf" aria-haspopup="dialog">Level 1</button>
+  <div class="levelwahl" id="levelwahl" role="dialog" aria-label="Level aussuchen" hidden>
+    <h2>Welches Level?</h2>
+    <div class="levelreihe" id="levelreihe"></div>
+    <button class="levelzu" id="levelzu">Weiterspielen</button>
+  </div>
 </div>
 <p class="tipp" id="tipp">Hol dir den <b>Staubsauger</b>!</p>
 <div class="steuerung">

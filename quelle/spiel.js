@@ -400,6 +400,7 @@ function antwortGeben(nummer) {
     bannerZeigen("Leider falsch!");
     const zurueck = zimmer - 1;
     setTimeout(() => {
+      if (!rechnung || rechnung.phase !== "falsch") return;     // inzwischen ein anderes Level ausgesucht
       document.getElementById("antworten").hidden = true;
       zimmerWechseln(zurueck, "Rechne beim nächsten Mal ganz in Ruhe nach – du schaffst das!");
     }, 2800);
@@ -498,7 +499,8 @@ function teufelBesiegt() {
 }
 
 // Solange der Kistenteufel fragt, steht die Zeit still – so kann man in Ruhe rechnen.
-function zeitSteht() { return rechnung !== null && rechnung.art === "teufel"; }
+// Auch während man ein Level aussucht, wartet alles.
+function zeitSteht() { return levelWahlOffen || (rechnung !== null && rechnung.art === "teufel"); }
 
 function kisteBewegen() {
   if (!kiste) return;
@@ -1375,6 +1377,7 @@ function zimmerWechseln(neuesZimmer, nochmalVersuchen) {
 
 function zimmerAufbauen(nummer, nochmalVersuchen) {
   zimmer = nummer;
+  document.getElementById("levelknopf").textContent = "Level " + ZIMMER[nummer].level;
   tuerOffen = false;
   glitzer = []; saugStreifen = []; sprechblasen = [];
   geister = []; bosse = []; geld = []; rechnung = null; kiste = null; kanonen = []; dynamit = [];
@@ -2544,6 +2547,62 @@ document.getElementById("nochmal").addEventListener("click", () => {
     neuesSpiel(1);
   }
 });
+
+// ---- 21b. Level aussuchen ------------------------------------------
+// Oben rechts im Zimmer ist ein Knopf: Damit kann Arthur direkt in jedes Level springen.
+let levelWahlOffen = false;
+const levelKnopf = document.getElementById("levelknopf");
+const levelWahl = document.getElementById("levelwahl");
+const levelReihe = document.getElementById("levelreihe");
+
+// Das erste Zimmer von jedem Level
+function ersteZimmer() {
+  const erste = {};
+  for (const nummer of Object.keys(ZIMMER).map(Number).sort((a, b) => a - b)) {
+    if (!erste[ZIMMER[nummer].level]) erste[ZIMMER[nummer].level] = nummer;
+  }
+  return erste;
+}
+
+function levelWahlZeigen() {
+  tonStarten();
+  levelWahlOffen = true;
+  levelReihe.innerHTML = "";
+  const erste = ersteZimmer();
+  for (const level of Object.keys(erste)) {
+    const k = document.createElement("button");
+    k.textContent = level;
+    k.setAttribute("aria-label", "Level " + level);
+    if (Number(level) === ZIMMER[zimmer].level) k.classList.add("jetzt");
+    k.addEventListener("click", () => levelStarten(erste[level]));
+    levelReihe.appendChild(k);
+  }
+  levelWahl.hidden = false;
+  levelKnopf.hidden = true;
+  levelReihe.querySelector(".jetzt")?.focus();
+}
+
+function levelWahlSchliessen() {
+  levelWahlOffen = false;
+  levelWahl.hidden = true;
+  levelKnopf.hidden = false;
+}
+
+function levelStarten(nummer) {
+  levelWahlSchliessen();
+  geschafft = false; rechnung = null;
+  document.getElementById("nochmal").hidden = true;
+  document.getElementById("antworten").hidden = true;
+  // Die Nummer kommt auch in die Adresse – lädt man die Seite neu, bleibt man in diesem Level
+  try { history.replaceState(null, "", "#zimmer" + nummer); } catch (e) { /* egal */ }
+  // Läuft gerade noch ein Zimmerwechsel, warten wir kurz, bis er fertig ist
+  const los = () => { if (wechselt) setTimeout(los, 200); else zimmerWechseln(nummer); };
+  los();
+}
+
+levelKnopf.addEventListener("click", levelWahlZeigen);
+document.getElementById("levelzu").addEventListener("click", levelWahlSchliessen);
+addEventListener("keydown", (e) => { if (e.key === "Escape" && levelWahlOffen) levelWahlSchliessen(); });
 
 // ---- 22. Die Spiel-Schleife --------------------------------------
 // Diese Funktion läuft ungefähr 60-mal in der Sekunde:

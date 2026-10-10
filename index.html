@@ -83,6 +83,34 @@
   @keyframes wackeln { 25% { transform: translateX(-7px); } 75% { transform: translateX(7px); } }
   @media (prefers-reduced-motion: reduce) { .antwort.falsch { animation: none; } }
 
+  /* Der Level-Knopf oben rechts im Zimmer und die Level-Auswahl */
+  .levelknopf {
+    position: absolute; top: 8px; right: 8px; z-index: 3;
+    font: 800 17px var(--schrift); color: var(--gold); background: rgba(17, 16, 20, .78);
+    border: 2px solid var(--gold); border-radius: 999px; padding: 2px 14px; cursor: pointer;
+    touch-action: manipulation;
+  }
+  .levelknopf:focus-visible, .levelwahl button:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
+  .levelwahl {
+    position: absolute; inset: 0; z-index: 4; border-radius: 6px;
+    background: rgba(17, 16, 20, .88);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(10px, 3vh, 22px);
+  }
+  .levelwahl[hidden] { display: none; }
+  .levelwahl h2 { margin: 0; font-size: clamp(24px, 5vw, 40px); font-weight: 800; }
+  .levelreihe { display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(8px, 2vw, 16px); max-width: 92%; }
+  .levelreihe button {
+    font: 800 clamp(26px, 5.5vw, 44px) var(--schrift); font-variant-numeric: tabular-nums;
+    width: clamp(58px, 11vw, 96px); aspect-ratio: 1; padding: 0;
+    color: var(--schwarz); background: var(--gold); border: 0; border-radius: 18px;
+    box-shadow: 0 5px 0 #b8871a; cursor: pointer; touch-action: manipulation;
+  }
+  .levelreihe button.jetzt { background: var(--rosa); box-shadow: 0 5px 0 #b83f81; }
+  .levelzu {
+    font: 800 20px var(--schrift); color: var(--text); background: transparent;
+    border: 2px solid var(--text); border-radius: 999px; padding: 4px 22px; cursor: pointer; touch-action: manipulation;
+  }
+
   /* ---- Steuerung fürs Handy und Tablet (am Computer unsichtbar) ---- */
   .steuerung { display: none; width: 100%; align-items: stretch; gap: 16px; }
   .joyfeld { position: relative; flex: 1; min-height: 170px; touch-action: none; }
@@ -151,6 +179,12 @@
     <button class="antwort" id="antwort3"></button>
   </div>
   <button class="nochmal" id="nochmal" hidden>Nochmal spielen</button>
+  <button class="levelknopf" id="levelknopf" aria-haspopup="dialog">Level 1</button>
+  <div class="levelwahl" id="levelwahl" role="dialog" aria-label="Level aussuchen" hidden>
+    <h2>Welches Level?</h2>
+    <div class="levelreihe" id="levelreihe"></div>
+    <button class="levelzu" id="levelzu">Weiterspielen</button>
+  </div>
 </div>
 <p class="tipp" id="tipp">Hol dir den <b>Staubsauger</b>!</p>
 <div class="steuerung">
@@ -564,6 +598,7 @@ function antwortGeben(nummer) {
     bannerZeigen("Leider falsch!");
     const zurueck = zimmer - 1;
     setTimeout(() => {
+      if (!rechnung || rechnung.phase !== "falsch") return;     // inzwischen ein anderes Level ausgesucht
       document.getElementById("antworten").hidden = true;
       zimmerWechseln(zurueck, "Rechne beim nächsten Mal ganz in Ruhe nach – du schaffst das!");
     }, 2800);
@@ -662,7 +697,8 @@ function teufelBesiegt() {
 }
 
 // Solange der Kistenteufel fragt, steht die Zeit still – so kann man in Ruhe rechnen.
-function zeitSteht() { return rechnung !== null && rechnung.art === "teufel"; }
+// Auch während man ein Level aussucht, wartet alles.
+function zeitSteht() { return levelWahlOffen || (rechnung !== null && rechnung.art === "teufel"); }
 
 function kisteBewegen() {
   if (!kiste) return;
@@ -1539,6 +1575,7 @@ function zimmerWechseln(neuesZimmer, nochmalVersuchen) {
 
 function zimmerAufbauen(nummer, nochmalVersuchen) {
   zimmer = nummer;
+  document.getElementById("levelknopf").textContent = "Level " + ZIMMER[nummer].level;
   tuerOffen = false;
   glitzer = []; saugStreifen = []; sprechblasen = [];
   geister = []; bosse = []; geld = []; rechnung = null; kiste = null; kanonen = []; dynamit = [];
@@ -2708,6 +2745,62 @@ document.getElementById("nochmal").addEventListener("click", () => {
     neuesSpiel(1);
   }
 });
+
+// ---- 21b. Level aussuchen ------------------------------------------
+// Oben rechts im Zimmer ist ein Knopf: Damit kann Arthur direkt in jedes Level springen.
+let levelWahlOffen = false;
+const levelKnopf = document.getElementById("levelknopf");
+const levelWahl = document.getElementById("levelwahl");
+const levelReihe = document.getElementById("levelreihe");
+
+// Das erste Zimmer von jedem Level
+function ersteZimmer() {
+  const erste = {};
+  for (const nummer of Object.keys(ZIMMER).map(Number).sort((a, b) => a - b)) {
+    if (!erste[ZIMMER[nummer].level]) erste[ZIMMER[nummer].level] = nummer;
+  }
+  return erste;
+}
+
+function levelWahlZeigen() {
+  tonStarten();
+  levelWahlOffen = true;
+  levelReihe.innerHTML = "";
+  const erste = ersteZimmer();
+  for (const level of Object.keys(erste)) {
+    const k = document.createElement("button");
+    k.textContent = level;
+    k.setAttribute("aria-label", "Level " + level);
+    if (Number(level) === ZIMMER[zimmer].level) k.classList.add("jetzt");
+    k.addEventListener("click", () => levelStarten(erste[level]));
+    levelReihe.appendChild(k);
+  }
+  levelWahl.hidden = false;
+  levelKnopf.hidden = true;
+  levelReihe.querySelector(".jetzt")?.focus();
+}
+
+function levelWahlSchliessen() {
+  levelWahlOffen = false;
+  levelWahl.hidden = true;
+  levelKnopf.hidden = false;
+}
+
+function levelStarten(nummer) {
+  levelWahlSchliessen();
+  geschafft = false; rechnung = null;
+  document.getElementById("nochmal").hidden = true;
+  document.getElementById("antworten").hidden = true;
+  // Die Nummer kommt auch in die Adresse – lädt man die Seite neu, bleibt man in diesem Level
+  try { history.replaceState(null, "", "#zimmer" + nummer); } catch (e) { /* egal */ }
+  // Läuft gerade noch ein Zimmerwechsel, warten wir kurz, bis er fertig ist
+  const los = () => { if (wechselt) setTimeout(los, 200); else zimmerWechseln(nummer); };
+  los();
+}
+
+levelKnopf.addEventListener("click", levelWahlZeigen);
+document.getElementById("levelzu").addEventListener("click", levelWahlSchliessen);
+addEventListener("keydown", (e) => { if (e.key === "Escape" && levelWahlOffen) levelWahlSchliessen(); });
 
 // ---- 22. Die Spiel-Schleife --------------------------------------
 // Diese Funktion läuft ungefähr 60-mal in der Sekunde:
