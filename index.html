@@ -179,7 +179,10 @@
 //            Zimmer 13 – der Weg durch die Lava
 //            Zimmer 14 – die Spinnenkanone und zwei Kronen-Geister
 //            Zimmer 15 – der Geisterkaiser mit drei Balken
-//  Level 2 bis 6 hat Arthur selbst gezeichnet und erfunden.
+//  Level 7:  Zimmer 16 – der Truhen-Boss mit großem Balken
+//            Zimmer 17 – der Lava-Geist
+//            Zimmer 18 – der Blitz-Geist
+//  Level 2 bis 7 hat Arthur selbst gezeichnet und erfunden.
 // ================================================================
 
 // ---- 0. Stellschrauben -------------------------------------------
@@ -302,6 +305,16 @@ const ZIMMER = {
   14: { level: 6, hinten: "#3b2a4d", links: "#33243f", rechts: "#2b1f36", streifen: "rgba(255,255,255,0.08)",
         tuerHinten: { von: 640, bis: 760 }, herzen: true, geisterBeissen: true, geisterTempo: 1.9 },
   15: { level: 6, hinten: "#16213e", links: "#121b33", rechts: "#0e1629", streifen: "rgba(111,211,255,0.10)",
+        herzen: true, geisterBeissen: true, geisterTempo: 1.9, kerzen: true, geld: GELD_LEVEL_3 },
+  // Level 7
+  16: { level: 7, hinten: "#1f4d3a", links: "#1a4232", rechts: "#16382a", streifen: "rgba(255,211,77,0.14)",
+        tuerHinten: { von: 380, bis: 500 }, herzen: true },
+  // Ganz viel Lava und ein Zickzack-Weg. Hinten links die Tür – die geht erst auf, wenn der Lava-Geist weg ist.
+  17: { level: 7, hinten: "#3d0f1c", links: "#340c18", rechts: "#2b0a14", streifen: "rgba(255,140,40,0.12)",
+        tuerHinten: { von: 140, bis: 260 }, herzen: true, nurSchubsen: true, lava: true,
+        weg: [[330, 460, 570, 560], [330, 300, 450, 560], [330, 300, 650, 410], [530, 150, 650, 410],
+              [140, 150, 650, 260], [140, -120, 260, 260]] },
+  18: { level: 7, hinten: "#22163f", links: "#1d1236", rechts: "#180f2d", streifen: "rgba(255,255,120,0.10)",
         herzen: true, geisterBeissen: true, geisterTempo: 1.9, kerzen: true, geld: GELD_LEVEL_3 },
 };
 let zimmer = 1;
@@ -802,8 +815,9 @@ let truhe = null;
 let stufe = 0;
 
 // groesse, jagt (wie schnell sie jagt) und kraft (wie lang ihr Balken ist) kann man einstellen
-function truheAufstellen(x, z, groesse, jagt, kraft) {
-  truhe = { x, z, groesse: groesse || 165, jagt: jagt || 1.25, kraft: kraft || 100, offen: false };
+// extra: noch mehr Einstellungen, zum Beispiel { balkenOben: true, name: "Truhen-Boss" } (Level 7)
+function truheAufstellen(x, z, groesse, jagt, kraft, extra) {
+  truhe = { x, z, groesse: groesse || 165, jagt: jagt || 1.25, kraft: kraft || 100, offen: false, extra: extra || {} };
 }
 
 function truheBewegen() {
@@ -836,7 +850,7 @@ function truheWirdLebendig() {
   const k = bossMachen({
     name: "Truhe", x: truhe.x, z: truhe.z, groesse: truhe.groesse, kraftMax: truhe.kraft,
     truhe: true, schwebt: 0, radius: 62 * truhe.groesse / 165, jagt: truhe.jagt, jagdPhasen: true,
-    dx: 0.6, dz: 0.4, stoss: 12, ruf: "HAPPS!",
+    dx: 0.6, dz: 0.4, stoss: 12, ruf: "HAPPS!", ...truhe.extra,
   });
   k.jagtGerade = true; k.jagdUhr = 200;    // sie legt sofort los …
   k.schubsPause = 80;                      // … aber man bekommt einen kleinen Vorsprung
@@ -1344,8 +1358,9 @@ function einenBossBewegen(k) {
         // Er zielt einmal auf das Männchen und rast dann geradeaus los
         const zuX = maennchen.x - k.x, zuZ = maennchen.z - k.z;
         const weit = Math.hypot(zuX, zuZ) || 1;
-        k.rasenX = (zuX / weit) * BLINK_TEMPO;
-        k.rasenZ = (zuZ / weit) * BLINK_TEMPO;
+        const tempo = k.blinkTempo || BLINK_TEMPO;
+        k.rasenX = (zuX / weit) * tempo;
+        k.rasenZ = (zuZ / weit) * tempo;
         buhTon();
       }
     }
@@ -1410,8 +1425,8 @@ function einenBossBewegen(k) {
     k.wut = 20;
     buhTon();
     sprechblase(k.ruf, k.x, k.truhe ? 200 : 250, k.z);
-    // Ab Level 2 kostet das ein Herz!
-    if (ZIMMER[zimmer].herzen) herzVerlieren();
+    // Ab Level 2 kostet das ein Herz! (Im Lava-Raum schubst er nur – das Herz kostet dann die Lava.)
+    if (ZIMMER[zimmer].herzen && !ZIMMER[zimmer].nurSchubsen) herzVerlieren();
   }
 }
 
@@ -1463,12 +1478,14 @@ function alleBosseBesiegt() {
     setTimeout(koenigsMelodie, 300);
     zaehlerZeigen("Geisterkönig: besiegt!");
     tippZeigen("Du hast den <b>Geisterkönig</b> besiegt! Die Tür ist offen – auf zu Level 2!");
-  } else if (zimmer === 3 || zimmer === 6 || zimmer === 12 || zimmer === 14) {
+  } else if (zimmer === 3 || zimmer === 6 || zimmer === 12 || zimmer === 14 || zimmer === 16 || zimmer === 17) {
     tuerOffen = true;
     setTimeout(siegesMelodie, 300);
     if (zimmer === 6) zaehlerZeigen("Kronen-Geist: besiegt!");
-    if (zimmer === 12) zaehlerZeigen("Truhe: eingesaugt!");
-    const geschafftText = { 3: "Alle drei besiegt!", 6: "Besiegt!", 12: "Die Truhe ist eingesaugt!", 14: "Beide besiegt!" };
+    if (zimmer === 12 || zimmer === 16) zaehlerZeigen("Truhe: eingesaugt!");
+    if (zimmer === 17) zaehlerZeigen("Lava-Geist: besiegt!");
+    const geschafftText = { 3: "Alle drei besiegt!", 6: "Besiegt!", 12: "Die Truhe ist eingesaugt!", 14: "Beide besiegt!",
+                            16: "Der Truhen-Boss ist eingesaugt!", 17: "Der Lava-Geist ist weg!" };
     tippZeigen(geschafftText[zimmer] + " Die <b>Tür hinten</b> ist offen!");
   } else if (ZIMMER[zimmer].geld) {
     // Die kleinen Helfer-Geister verpuffen …
@@ -1764,6 +1781,58 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     bannerZeigen("Der Geisterkaiser!");
     setTimeout(() => {
       if (zimmer === 15 && bosse[0]) { lachTon(); sprechblase("Ich bin der Kaiser aller Geister!", bosse[0].x, 330, bosse[0].z); }
+    }, 700);
+  }
+
+  if (nummer === 16) {
+    // Level 7, erstes Zimmer: wieder die Truhe mit dem Staubsauger – aber jetzt ist sie ein richtiger Boss
+    // mit einem großen Balken oben, wie ein Geisterboss.
+    maennchen.x = 450; maennchen.z = 530;
+    maennchen.hatSauger = false;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    truheAufstellen(450, 300, 230, 1.75, 200, { name: "Truhen-Boss", balkenOben: true });
+    zaehlerZeigen("Wo ist der Staubsauger?");
+    tippZeigen("Der Staubsauger steckt in der <b>Truhe</b>. Aber Achtung – diesmal ist sie ein <b>Boss</b>!");
+    bannerZeigen("Level 7");
+  }
+
+  if (nummer === 17) {
+    // Level 7, zweites Zimmer: ganz viel Lava, ein Zickzack-Weg – und über der Lava schwebt ein Kronen-Geist.
+    // Erst wenn er eingesaugt ist, geht die Tür hinten links auf.
+    maennchen.x = 450; maennchen.z = 520;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    bosse = [bossMachen({
+      name: "Lava-Geist", x: 760, z: 160, groesse: 200, kraftMax: 120, radius: 66, stoss: 15,
+      jagt: 1.2, jagdPhasen: true, dx: -0.8, dz: 0.6, balkenOben: true,
+    })];
+    bosse[0].schubsPause = 150;
+    zaehlerZeigen("Lava-Geist!");
+    tippZeigen("Saug den <b>Lava-Geist</b> ein – aber bleib auf dem <b>Weg</b>! Er will dich in die Lava schubsen.");
+    bannerZeigen("Der Lava-Geist!");
+    setTimeout(() => {
+      if (zimmer === 17 && bosse[0]) { lachTon(); sprechblase("Ab in die Lava mit dir!", bosse[0].x, 250, bosse[0].z); }
+    }, 700);
+  }
+
+  if (nummer === 18) {
+    // Level 7, letztes Zimmer: ein ganz großer Geist, der blinkt und dann ganz schnell herumrast.
+    // Er hat nur einen Balken.
+    maennchen.x = 450; maennchen.z = 540;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    bosse = [bossMachen({
+      name: "Blitz-Geist", x: 450, z: 300, groesse: 400, kraftMax: 240, schwebt: 18, zMin: 300, tiefFaktor: 0.55,
+      radius: 130, reichweite: 350, zieht: 0.3, jagt: 0.6, jagdPhasen: true, dx: 0.7, dz: 0.5, stoss: 18,
+      blinkt: true, blinkTempo: 4.0, balkenOben: true, wirdZuGeld: true,
+    })];
+    bosse[0].schubsPause = 200; bosse[0].jagdUhr = 220;     // am Anfang lässt er einem ein paar Sekunden Zeit
+    zaehlerZeigen("Blitz-Geist!");
+    tippZeigen("Wenn der <b>Blitz-Geist</b> blinkt, rast er los: weglaufen! Blinkt er nicht: saugen!");
+    bannerZeigen("Der Blitz-Geist!");
+    setTimeout(() => {
+      if (zimmer === 18 && bosse[0]) { lachTon(); sprechblase("Ich bin schneller als der Blitz!", bosse[0].x, 330, bosse[0].z); }
     }, 700);
   }
 
