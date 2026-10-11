@@ -18,7 +18,10 @@
 //  Level 7:  Zimmer 16 – der Truhen-Boss mit großem Balken
 //            Zimmer 17 – der Lava-Geist
 //            Zimmer 18 – der Blitz-Geist
-//  Level 2 bis 7 hat Arthur selbst gezeichnet und erfunden.
+//  Level 8:  Zimmer 19 – Truhe, zwei Blink-Kronen-Geister und die Dynamitkanone
+//            Zimmer 20 – über die Lava springen
+//            Zimmer 21 – die Bewegungsfalle und der Donner-Geist
+//  Level 2 bis 8 hat Arthur selbst gezeichnet und erfunden.
 // ================================================================
 
 // ---- 0. Stellschrauben -------------------------------------------
@@ -42,6 +45,10 @@ const BLINK_TEMPO = 3.3;        // so schnell rast er beim Blinken
 const NETZ_TEMPO = 2.4;         // so schnell fliegt ein Netz
 const NETZ_PAUSE = 140;         // so lange wartet die Spinnenkanone zwischen zwei Schüssen
 const KLEBEZEIT = 180;          // so lange klebt man im Netz fest (180 = 3 Sekunden)
+// Level 8: Springen und die Bewegungsfalle
+const SPRUNG_KRAFT = 10;        // so kräftig springt das Männchen ab (größer = höher und weiter)
+const SCHWERKRAFT = 0.65;       // so schnell kommt es wieder runter
+const PLATTE_TEMPO = 2.0;       // so schnell fährt die Bewegungsfalle
 
 // ---- 1. Unsere Bilder --------------------------------------------
 const BILDER = {
@@ -152,6 +159,16 @@ const ZIMMER = {
               [140, 150, 650, 260], [140, -120, 260, 260]] },
   18: { level: 7, hinten: "#22163f", links: "#1d1236", rechts: "#180f2d", streifen: "rgba(255,255,120,0.10)",
         herzen: true, geisterBeissen: true, geisterTempo: 1.9, kerzen: true, geld: GELD_LEVEL_3 },
+  // Level 8 – ab hier kann man springen!
+  19: { level: 8, hinten: "#2d3b5e", links: "#273352", rechts: "#212c47", streifen: "rgba(255,211,77,0.12)",
+        tuerHinten: { von: 400, bis: 520 }, herzen: true, springen: true },
+  // Der Weg durch die Lava hat Lücken – da muss man drüberspringen
+  20: { level: 8, hinten: "#3d0f1c", links: "#340c18", rechts: "#2b0a14", streifen: "rgba(255,140,40,0.12)",
+        tuerHinten: { von: 140, bis: 260 }, herzen: true, lava: true, springen: true,
+        weg: [[330, 480, 570, 560], [380, 250, 500, 400], [580, 250, 720, 340], [600, 90, 720, 170],
+              [140, 90, 520, 170], [140, -120, 260, 90]] },
+  21: { level: 8, hinten: "#1e2a24", links: "#1a241f", rechts: "#151e1a", streifen: "rgba(111,211,255,0.10)",
+        herzen: true, geisterBeissen: true, kerzen: true, springen: true, geld: GELD_LEVEL_3 },
 };
 let zimmer = 1;
 let tuerOffen = false;
@@ -174,7 +191,10 @@ const maennchen = {
   hatSauger: false,
   stossX: 0, stossZ: 0,   // wenn ein Geist einen wegschubst
   klebt: 0,               // zählt runter, solange man im Netz festklebt
+  hoehe: 0,               // Level 8: so hoch ist es gerade in der Luft (0 = auf dem Boden)
+  sprungTempo: 0,         // so schnell geht es gerade nach oben (oder unten)
 };
+let sprungWunsch = false; // wurde gerade der Spring-Knopf gedrückt?
 
 // Wo fangen bei jedem Bild die Beine an? (0 = ganz oben, 1 = ganz unten)
 const BEINE = {
@@ -605,7 +625,9 @@ function dynamitBewegen() {
     // Getroffen?
     const zumMaennchen = Math.hypot(maennchen.x - d.x, maennchen.z - d.z);
     const trefferWeite = netz ? (d.alter < NETZ_AUF ? 36 : 60) : 42;      // ein offenes Netz ist breiter
-    if (zumMaennchen < trefferWeite && unverwundbar === 0 && !wechselt) {
+    // Wer drüberspringt, den trifft es nicht mehr (auch nicht beim Landen)
+    if (zumMaennchen < trefferWeite && maennchen.hoehe >= 35) d.uebersprungen = true;
+    if (zumMaennchen < trefferWeite && unverwundbar === 0 && !wechselt && maennchen.hoehe < 35 && !d.uebersprungen) {
       if (netz) {
         // Ein Netz kostet kein Herz – aber man klebt fest!
         if (maennchen.klebt === 0) {
@@ -701,6 +723,75 @@ function truheWirdLebendig() {
                       : "Die Truhe lebt! Halte die <b>Leertaste</b> gedrückt und saug sie ein!");
 }
 
+// ---- 8e. Die Bewegungsfalle (Level 8) --------------------------------
+// Eine Metall-Platte am Boden, links und rechts an Seilen. Sie fährt immer im Viereck:
+// nach rechts, nach vorne, nach links, nach hinten. Wer draufsteht, fährt mit –
+// und jedes Mal, wenn sie die Richtung wechselt, gibt es einen Schubs!
+let platte = null;
+const PLATTE_WEG = [[300, 210], [600, 210], [600, 410], [300, 410]];   // die vier Ecken, die sie abfährt
+
+function platteAufstellen() {
+  platte = { x: PLATTE_WEG[0][0], z: PLATTE_WEG[0][1], breite: 250, tiefe: 150, ziel: 1, dx: 0, dz: 0, warten: 60 };
+}
+function aufDerPlatte() {
+  return Math.abs(maennchen.x - platte.x) < platte.breite / 2 && Math.abs(maennchen.z - platte.z) < platte.tiefe / 2;
+}
+function platteBewegen() {
+  if (!platte || wechselt || geschafft) return;
+  if (platte.warten > 0) {
+    platte.warten = platte.warten - 1;
+    platte.dx = 0; platte.dz = 0;
+    if (platte.warten === 0 && maennchen.hoehe === 0 && aufDerPlatte()) {
+      // Ruck! Sie fährt los – und schubst einen in die neue Richtung
+      const [zx, zz] = PLATTE_WEG[platte.ziel];
+      const weit = Math.hypot(zx - platte.x, zz - platte.z) || 1;
+      maennchen.stossX = ((zx - platte.x) / weit) * 9;
+      maennchen.stossZ = ((zz - platte.z) / weit) * 9;
+      klapperTon();
+      sprechblase("Huiii!", maennchen.x, 220, maennchen.z);
+    }
+    return;
+  }
+  const [zx, zz] = PLATTE_WEG[platte.ziel];
+  const weit = Math.hypot(zx - platte.x, zz - platte.z);
+  if (weit <= PLATTE_TEMPO) {
+    platte.x = zx; platte.z = zz; platte.dx = 0; platte.dz = 0;
+    platte.ziel = (platte.ziel + 1) % PLATTE_WEG.length;
+    platte.warten = 35;
+    return;
+  }
+  platte.dx = ((zx - platte.x) / weit) * PLATTE_TEMPO;
+  platte.dz = ((zz - platte.z) / weit) * PLATTE_TEMPO;
+  platte.x = platte.x + platte.dx;
+  platte.z = platte.z + platte.dz;
+}
+function platteMalen() {
+  const P = platte, x1 = P.x - P.breite / 2, x2 = P.x + P.breite / 2, z1 = P.z - P.tiefe / 2, z2 = P.z + P.tiefe / 2;
+  // die Seile links und rechts zur Wand – mit einer Rolle an der Wand
+  for (const [vonX, wandX] of [[x1, 0], [x2, BREITE]]) {
+    linie([vonX, 14, P.z], [wandX, 40, P.z], "#3b2a1a", 6);
+    linie([vonX, 14, P.z], [wandX, 40, P.z], "#c8a46a", 3);
+    const rolle = aufsBild(wandX, 40, P.z);
+    malen.fillStyle = "#111014"; malen.beginPath(); malen.arc(rolle.x, rolle.y, 9, 0, 6.28); malen.fill();
+    malen.fillStyle = "#9aa3ad"; malen.beginPath(); malen.arc(rolle.x, rolle.y, 5, 0, 6.28); malen.fill();
+  }
+  // die Platte mit gelb-schwarzem Warnrand
+  flaeche([[x1, 0, z1], [x2, 0, z1], [x2, 0, z2], [x1, 0, z2]], "#ffd34d", 5);
+  for (let i = 0; i < 10; i++) {
+    const a = x1 + i * P.breite / 10;
+    flaeche([[a, 0, z1], [a + P.breite / 20, 0, z1], [a + P.breite / 20 + 8, 0, z2], [a + 8, 0, z2]], "rgba(17,16,20,0.85)");
+  }
+  flaeche([[x1 + 18, 0, z1 + 16], [x2 - 18, 0, z1 + 16], [x2 - 18, 0, z2 - 16], [x1 + 18, 0, z2 - 16]], "#8e99a6", 3);
+  // ein Pfeil zeigt, wohin sie als Nächstes fährt
+  const [zx, zz] = PLATTE_WEG[P.ziel];
+  const weit = Math.hypot(zx - P.x, zz - P.z) || 1, rx = (zx - P.x) / weit, rz = (zz - P.z) / weit;
+  const qx = -rz, qz = rx, l = 46, b = 26;
+  const blinken = P.warten > 0 && Math.floor(zeit / 6) % 2 === 0;
+  flaeche([[P.x + rx * l, 0, P.z + rz * l], [P.x + qx * b, 0, P.z + qz * b], [P.x - rx * 10 + qx * 10, 0, P.z - rz * 10 + qz * 10],
+           [P.x - rx * l + qx * 10, 0, P.z - rz * l + qz * 10], [P.x - rx * l - qx * 10, 0, P.z - rz * l - qz * 10],
+           [P.x - rx * 10 - qx * 10, 0, P.z - rz * 10 - qz * 10], [P.x - qx * b, 0, P.z - qz * b]], blinken ? "#ff5a5a" : "#ffd34d", 3);
+}
+
 // Welches Bild gehört zu diesem Gegner?
 function bossBild(k) {
   if (!k.truhe) return bild.koenig;
@@ -775,6 +866,7 @@ function zischTon()     { piep(1400, 300, 0.5, "sawtooth", 0, 0.12); piep(700, 1
 function pflatschTon()  { piep(240, 120, 0.15, "sine", 0, 0.25); piep(500, 300, 0.1, "triangle", 0.05, 0.12); }
 function klapperTon()   { piep(520, 260, 0.04, "square", 0, 0.05); }
 function bummTon()      { piep(140, 40, 0.3, "square", 0, 0.22); piep(90, 30, 0.35, "sine", 0.02, 0.3); }
+function sprungTon()    { piep(300, 700, 0.15, "sine", 0, 0.18); }
 function puffTon()      { piep(500, 80, 0.25, "sawtooth", 0, 0.25); }
 function warnTon()      { piep(880, 880, 0.08, "square", 0, 0.14); piep(880, 880, 0.08, "square", 0.14, 0.14); piep(1100, 1100, 0.12, "square", 0.28, 0.14); }
 function siegesMelodie() {
@@ -795,6 +887,10 @@ const TASTEN = {
 addEventListener("keydown", (e) => {
   const was = TASTEN[e.key];
   if (was) { gedrueckt[was] = true; e.preventDefault(); tonStarten(); }
+  // Springen (ab Level 8): Taste J, Enter oder Shift
+  if ((e.key === "j" || e.key === "J" || e.key === "Enter" || e.key === "Shift") && !e.repeat) {
+    sprungWunsch = true; tonStarten(); e.preventDefault();
+  }
   // Bei der Rechen-Aufgabe: Tasten 1, 2 und 3 wählen eine Antwort
   if (e.key === "1" || e.key === "2" || e.key === "3") { tonStarten(); antwortGeben(Number(e.key) - 1); }
 });
@@ -859,6 +955,15 @@ saugKnopf.addEventListener("pointerdown", (e) => {
 for (const ende of ["pointerup", "pointercancel"]) {
   saugKnopf.addEventListener(ende, () => { gedrueckt.saugen = false; saugKnopf.classList.remove("an"); });
 }
+// Der Spring-Knopf fürs Handy (ab Level 8)
+const springKnopf = document.getElementById("springen");
+springKnopf.addEventListener("pointerdown", (e) => {
+  e.preventDefault(); tonStarten();
+  sprungWunsch = true; springKnopf.classList.add("an");
+});
+for (const ende of ["pointerup", "pointercancel", "pointerleave"]) {
+  springKnopf.addEventListener(ende, () => springKnopf.classList.remove("an"));
+}
 // Langes Drücken soll kein Menü öffnen
 addEventListener("contextmenu", (e) => e.preventDefault());
 addEventListener("blur", () => { for (const k in gedrueckt) gedrueckt[k] = false; });
@@ -883,6 +988,23 @@ function maennchenBewegen() {
     }
     return;
   }
+  // Springen (ab Level 8): hoch in die Luft – und wieder runter
+  if (sprungWunsch && Z.springen && maennchen.hoehe === 0) {
+    maennchen.sprungTempo = SPRUNG_KRAFT;
+    sprungTon();
+  }
+  sprungWunsch = false;
+  if (maennchen.hoehe > 0 || maennchen.sprungTempo > 0) {
+    maennchen.hoehe = maennchen.hoehe + maennchen.sprungTempo;
+    maennchen.sprungTempo = maennchen.sprungTempo - SCHWERKRAFT;
+    if (maennchen.hoehe <= 0) { maennchen.hoehe = 0; maennchen.sprungTempo = 0; schrittTon(); }
+  }
+  // Auf der Bewegungsfalle fährt man mit
+  if (platte && maennchen.hoehe === 0 && aufDerPlatte()) {
+    maennchen.x = maennchen.x + platte.dx;
+    maennchen.z = maennchen.z + platte.dz;
+  }
+
   let schrittX = 0, schrittZ = 0;
   if (gedrueckt.links)  schrittX = schrittX - 1;
   if (gedrueckt.rechts) schrittX = schrittX + 1;
@@ -936,7 +1058,7 @@ function maennchenBewegen() {
   maennchen.z = Math.max(hintererRand, Math.min(TIEFE - 10, maennchen.z));
 
   // Lava! Wer vom Weg abkommt, verbrennt sich die Füße.
-  if (Z.lava && !wechselt && !aufDemWeg(maennchen.x, maennchen.z)) inDieLava();
+  if (Z.lava && !wechselt && maennchen.hoehe === 0 && !aufDemWeg(maennchen.x, maennchen.z)) inDieLava();
 
   // Um die Kiste muss man außen herumlaufen
   if (kiste) {
@@ -1016,7 +1138,7 @@ function inDieLava() {
   zischTon();
   sprechblase("Heiß! Heiß!", maennchen.x, 220, maennchen.z);
   maennchen.x = 450; maennchen.z = 520;
-  maennchen.stossX = 0; maennchen.stossZ = 0;
+  maennchen.stossX = 0; maennchen.stossZ = 0; maennchen.hoehe = 0; maennchen.sprungTempo = 0;
   maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
   if (unverwundbar === 0) herzVerlieren();
   if (herzen > 0) tippZeigen("Autsch, die <b>Lava</b>! Bleib auf dem Weg.");
@@ -1135,7 +1257,7 @@ function bosseBewegen() {
   for (const k of bosse) einenBossBewegen(k);
   bosse = bosse.filter((k) => !k.weg);
   if (bosse.length < vorher) {
-    if (zimmer === 3 || zimmer === 14) zaehlerZeigen("Kronen-Geister: " + (bosseAmAnfang - bosse.length) + " von " + bosseAmAnfang);
+    if (zimmer === 3 || zimmer === 14 || (zimmer === 19 && stufe === 2)) zaehlerZeigen("Kronen-Geister: " + (bosseAmAnfang - bosse.length) + " von " + bosseAmAnfang);
     if (bosse.length === 0) alleBosseBesiegt();
   }
 }
@@ -1311,19 +1433,41 @@ function alleBosseBesiegt() {
     }
     return;
   }
+  // Level 8, erstes Zimmer: Die Truhe ist weg – jetzt kommen zwei Kronen-Geister mit Blinkmodus!
+  if (zimmer === 19 && stufe === 1) {
+    stufe = 2;
+    setTimeout(siegesMelodie, 300);
+    bosse = [
+      bossMachen({ name: "Blink-König", x: 220, z: 120, groesse: 190, kraftMax: 100, radius: 64, jagt: 1.0, jagdPhasen: true,
+                   dx: 0.9, dz: 0.6, blinkt: true, blinkTempo: 3.6 }),
+      bossMachen({ name: "Blink-König", x: 700, z: 120, groesse: 190, kraftMax: 100, radius: 64, jagt: 1.0, jagdPhasen: true,
+                   dx: -0.8, dz: 0.5, blinkt: true, blinkTempo: 3.6 }),
+    ];
+    bosse[0].blinkUhr = 200; bosse[1].blinkUhr = 340;        // sie blinken nicht gleichzeitig
+    bosse[0].schubsPause = 150; bosse[1].schubsPause = 150;
+    bosseAmAnfang = 2;
+    for (const k of bosse) for (let i = 0; i < 16; i++) sternchen(k.x, 80, k.z, "#6fd3ff");
+    lachTon();
+    sprechblase("Jetzt kommen wir!", 450, 250, 120);
+    kanonenWecken();
+    zaehlerZeigen("Kronen-Geister: 0 von 2");
+    tippZeigen("Zwei <b>Blink-Könige</b>! Wenn sie blinken, rasen sie los. Und pass auf das <b>Dynamit</b> auf!");
+    return;
+  }
   if (zimmer === 2) {
     tuerOffen = true;
     setTimeout(koenigsMelodie, 300);
     zaehlerZeigen("Geisterkönig: besiegt!");
     tippZeigen("Du hast den <b>Geisterkönig</b> besiegt! Die Tür ist offen – auf zu Level 2!");
-  } else if (zimmer === 3 || zimmer === 6 || zimmer === 12 || zimmer === 14 || zimmer === 16 || zimmer === 17) {
+  } else if (zimmer === 3 || zimmer === 6 || zimmer === 12 || zimmer === 14 || zimmer === 16 || zimmer === 17 || zimmer === 19) {
     tuerOffen = true;
     setTimeout(siegesMelodie, 300);
     if (zimmer === 6) zaehlerZeigen("Kronen-Geist: besiegt!");
     if (zimmer === 12 || zimmer === 16) zaehlerZeigen("Truhe: eingesaugt!");
     if (zimmer === 17) zaehlerZeigen("Lava-Geist: besiegt!");
     const geschafftText = { 3: "Alle drei besiegt!", 6: "Besiegt!", 12: "Die Truhe ist eingesaugt!", 14: "Beide besiegt!",
-                            16: "Der Truhen-Boss ist eingesaugt!", 17: "Der Lava-Geist ist weg!" };
+                            16: "Der Truhen-Boss ist eingesaugt!", 17: "Der Lava-Geist ist weg!", 19: "Beide Blink-Könige besiegt!" };
+    if (zimmer === 19) { kanonen = []; dynamit = []; }      // die Kanone hört auf
     tippZeigen(geschafftText[zimmer] + " Die <b>Tür hinten</b> ist offen!");
   } else if (ZIMMER[zimmer].geld) {
     // Die kleinen Helfer-Geister verpuffen …
@@ -1381,7 +1525,9 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
   tuerOffen = false;
   glitzer = []; saugStreifen = []; sprechblasen = [];
   geister = []; bosse = []; geld = []; rechnung = null; kiste = null; kanonen = []; dynamit = [];
-  truhe = null; stufe = 0;
+  truhe = null; stufe = 0; platte = null;
+  maennchen.hoehe = 0; maennchen.sprungTempo = 0; sprungWunsch = false;
+  document.body.classList.toggle("kannSpringen", !!ZIMMER[nummer].springen);
   sauger.x = 730; sauger.z = 450; sauger.versteckt = false; sauger.flug = 1;
   gefangen = 0;
   herzen = HERZEN_AM_ANFANG; unverwundbar = 0; treffBlitz = 0;
@@ -1675,6 +1821,53 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     }, 700);
   }
 
+  const springTipp = istTouch ? "mit <b>SPRINGEN</b>" : "mit der Taste <b>J</b>";
+
+  if (nummer === 19) {
+    // Level 8, erstes Zimmer – so hat Arthur es gezeichnet:
+    // die Truhe mit dem Staubsauger, hinten zwei Kronen-Geister und rechts an der Wand die Dynamitkanone.
+    maennchen.x = 450; maennchen.z = 530;
+    maennchen.hatSauger = false;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    truheAufstellen(330, 320, 215, 1.65, 120);
+    kanoneAufstellen("rechts", 330, 0, 150);       // sie wacht auf, wenn die Kronen-Geister kommen
+    zaehlerZeigen("Wo ist der Staubsauger?");
+    tippZeigen("Der Staubsauger steckt in der <b>Truhe</b>. Neu: Ab jetzt kannst du springen – " + springTipp + "!");
+    bannerZeigen("Level 8");
+  }
+
+  if (nummer === 20) {
+    // Level 8, zweites Zimmer: Der Weg durch die Lava hat Lücken. Da muss man drüberspringen!
+    maennchen.x = 450; maennchen.z = 520;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    tuerOffen = true;
+    zaehlerZeigen("Spring!");
+    tippZeigen("Der Weg hat <b>Lücken</b>! Spring drüber – " + springTipp + ".");
+    bannerZeigen("Spring über die Lava!");
+  }
+
+  if (nummer === 21) {
+    // Level 8, letztes Zimmer: die Bewegungsfalle und ein riesiger Geist mit Blinkmodus, der ganz viel aushält.
+    maennchen.x = 450; maennchen.z = 540;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    platteAufstellen();
+    bosse = [bossMachen({
+      name: "Donner-Geist", x: 450, z: 300, groesse: 410, kraftMax: 320, schwebt: 18, zMin: 300, tiefFaktor: 0.55,
+      radius: 130, reichweite: 350, zieht: 0.3, jagt: 0.6, jagdPhasen: true, dx: 0.7, dz: 0.5, stoss: 18,
+      blinkt: true, blinkTempo: 4.0, balkenOben: true, wirdZuGeld: true,
+    })];
+    bosse[0].schubsPause = 200; bosse[0].jagdUhr = 220;     // am Anfang lässt er einem ein paar Sekunden Zeit
+    zaehlerZeigen("Donner-Geist!");
+    tippZeigen("Vorsicht, die <b>Bewegungsfalle</b>! Wer draufsteht, fährt mit. Und wenn der Geist blinkt: weg!");
+    bannerZeigen("Der Donner-Geist!");
+    setTimeout(() => {
+      if (zimmer === 21 && bosse[0]) { lachTon(); sprechblase("Ich halte alles aus!", bosse[0].x, 330, bosse[0].z); }
+    }, 700);
+  }
+
   bosseAmAnfang = bosse.length;
   if (nochmalVersuchen) {
     bannerZeigen("Nochmal!");
@@ -1830,6 +2023,8 @@ function zimmerMalen() {
   }
   // Lava mit einem schmalen Weg
   if (Z.lava) lavaMalen(Z);
+  // Die Bewegungsfalle (Level 8)
+  if (platte) platteMalen();
   // Ein roter Teppich
   if (Z.teppich) {
     flaeche([[200, 0, 120], [700, 0, 120], [700, 0, 470], [200, 0, 470]], "#c2185b", 4);
@@ -1924,7 +2119,7 @@ function schattenMalen(x, z, breite, deckkraft) {
 // Wir schneiden das Foto vom Männchen in Stücke: oben der Körper, unten die Beine.
 // Dann bewegen wir die Beine abwechselnd – und schon sieht es aus, als würde es laufen.
 function maennchenMalen() {
-  const p = aufsBild(maennchen.x, 0, maennchen.z);
+  const p = aufsBild(maennchen.x, maennchen.hoehe, maennchen.z);
   const b = bild[maennchen.blickt];
   const h = maennchen.groesse * p.groesse;      // Größe auf dem Bildschirm
   const w = h * b.width / b.height;
@@ -2005,7 +2200,7 @@ function netzUeberMaennchenMalen() {
 function saugerInDerHandMalen() {
   const brummen = saugtGerade ? zufall(-1.5, 1.5) : 0;
   const daneben = Math.abs(maennchen.richtungX) < 0.5 ? 40 : 0;   // nach vorne/hinten: neben sich tragen
-  const p = aufsBild(maennchen.x + maennchen.richtungX * 52 + daneben + brummen, 0, maennchen.z + maennchen.richtungZ * 25);
+  const p = aufsBild(maennchen.x + maennchen.richtungX * 52 + daneben + brummen, maennchen.hoehe, maennchen.z + maennchen.richtungZ * 25);
   // Das Bild zeigt mit dem Rohr nach links – schaut das Männchen nach rechts, spiegeln wir es
   bildMalenAufFuessen(bild.sauger, p.x, p.y, 95 * p.groesse, maennchen.richtungX > 0);
 }
@@ -2427,7 +2622,7 @@ function allesMalen() {
     z: maennchen.z,
     malen: () => {
       const saugerHinten = maennchen.hatSauger && maennchen.richtungZ < -0.5;
-      schattenMalen(maennchen.x, maennchen.z, 46, 0.3);
+      schattenMalen(maennchen.x, maennchen.z, 46 * (1 - maennchen.hoehe / 160), 0.3);
       // Nach einem Treffer blinkt das Männchen
       if (unverwundbar > 0 && Math.floor(zeit / 5) % 2 === 0) malen.globalAlpha = 0.3;
       if (saugerHinten) saugerInDerHandMalen();
@@ -2614,7 +2809,7 @@ function spielSchleife() {
   if (!pause) geisterBewegen(); else saugtGerade = false;
   if (!wechselt && !pause) bosseBewegen();
   kisteBewegen();
-  if (!pause) { kanonenBewegen(); dynamitBewegen(); truheBewegen(); }
+  if (!pause) { kanonenBewegen(); dynamitBewegen(); truheBewegen(); platteBewegen(); }
   geldBewegen();
   effekteBewegen();
   saugTonAnpassen();
