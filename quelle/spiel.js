@@ -21,7 +21,8 @@
 //  Level 8:  Zimmer 19 – Truhe, zwei Blink-Kronen-Geister und die Dynamitkanone
 //            Zimmer 20 – über die Lava springen
 //            Zimmer 21 – die Bewegungsfalle und der Donner-Geist
-//  Level 2 bis 8 hat Arthur selbst gezeichnet und erfunden.
+//  Level 9:  Zimmer 22 – der Drache und der Pümpel
+//  Level 2 bis 9 hat Arthur selbst gezeichnet und erfunden.
 // ================================================================
 
 // ---- 0. Stellschrauben -------------------------------------------
@@ -49,6 +50,11 @@ const KLEBEZEIT = 180;          // so lange klebt man im Netz fest (180 = 3 Seku
 const SPRUNG_KRAFT = 10;        // so kräftig springt das Männchen ab (größer = höher und weiter)
 const SCHWERKRAFT = 0.65;       // so schnell kommt es wieder runter
 const PLATTE_TEMPO = 2.0;       // so schnell fährt die Bewegungsfalle
+// Level 9: der Drache und der Pümpel
+const PUEMPEL_KRAFT = 20;       // so viel nimmt ein Pümpel-Schlag vom Balken weg (größer = leichter)
+const SCHLAG_PAUSE = 24;        // so lange dauert es bis zum nächsten Schlag
+const FEUER_TEMPO = 3.0;        // so schnell fliegt ein Feuerball (das Männchen läuft mit 3.6)
+const FEUER_PAUSE = 120;        // so lange wartet der Drache zwischen zwei Feuerbällen
 
 // ---- 1. Unsere Bilder --------------------------------------------
 const BILDER = {
@@ -68,6 +74,9 @@ const BILDER = {
   kanoneSpinne: "__kanone_spinne__",  // die rote Spinnenkanone (Level 6)
   netzKnaeuel:  "__netz_knaeuel__",   // ein Netz, das noch zusammengeknüllt fliegt
   netzOffen:    "__netz_offen__",     // das aufgegangene Netz
+  drache:       "__drache__",         // Arthurs Drache (Level 9)
+  dracheFeuer:  "__drache_feuer__",   // derselbe Drache mit offenem Maul
+  puempel:      "__puempel__",        // der Pümpel
 };
 
 // Hier laden wir alle Bilder. Erst wenn alle fertig sind, geht's los.
@@ -169,6 +178,9 @@ const ZIMMER = {
               [140, 90, 520, 170], [140, -120, 260, 90]] },
   21: { level: 8, hinten: "#1e2a24", links: "#1a241f", rechts: "#151e1a", streifen: "rgba(111,211,255,0.10)",
         herzen: true, geisterBeissen: true, kerzen: true, springen: true, geld: GELD_LEVEL_3 },
+  // Level 9 – nur ein Raum: der Drache! Statt Staubsauger gibt es einen Pümpel.
+  22: { level: 9, hinten: "#3b2418", links: "#331f15", rechts: "#2b1a11", streifen: "rgba(255,140,40,0.10)",
+        herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
 };
 let zimmer = 1;
 let tuerOffen = false;
@@ -193,6 +205,8 @@ const maennchen = {
   klebt: 0,               // zählt runter, solange man im Netz festklebt
   hoehe: 0,               // Level 8: so hoch ist es gerade in der Luft (0 = auf dem Boden)
   sprungTempo: 0,         // so schnell geht es gerade nach oben (oder unten)
+  schlag: 0,              // Level 9: zählt runter, während der Pümpel zuschlägt
+  schlagPause: 0,
 };
 let sprungWunsch = false; // wurde gerade der Spring-Knopf gedrückt?
 
@@ -316,7 +330,7 @@ function bossMachen(was) {
 }
 
 // Je weniger Kraft ein Kronen-Geist hat, desto kleiner wird er
-function bossGroesse(k) { return k.groesse * (0.7 + 0.3 * k.kraft / k.kraftMax); }
+function bossGroesse(k) { return k.drache ? k.groesse : k.groesse * (0.7 + 0.3 * k.kraft / k.kraftMax); }
 
 // ---- 8. Das Geld und die Rechen-Aufgabe ----------------------------
 let geld = [];            // die Münzen und Scheine, die im Zimmer liegen
@@ -418,7 +432,7 @@ function antwortGeben(nummer) {
     zaehlerZeigen("Leider falsch!");
     tippZeigen("Leider falsch – richtig wären <b>" + rechnung.summe + " €</b>. Zurück in den Raum davor!");
     bannerZeigen("Leider falsch!");
-    const zurueck = zimmer - 1;
+    const zurueck = ZIMMER[zimmer - 1] && ZIMMER[zimmer - 1].level === ZIMMER[zimmer].level ? zimmer - 1 : zimmer;
     setTimeout(() => {
       if (!rechnung || rechnung.phase !== "falsch") return;     // inzwischen ein anderes Level ausgesucht
       document.getElementById("antworten").hidden = true;
@@ -642,7 +656,7 @@ function dynamitBewegen() {
         maennchen.stossZ = ((maennchen.z - d.z) / weit) * 9;
         for (let i = 0; i < 16; i++) sternchen(d.x, 60, d.z, i % 2 ? "#ffb347" : "#ff5a5a");
         puffTon();
-        sprechblase("PENG!", d.x, 170, d.z);
+        sprechblase(d.art === "feuer" ? "HEISS!" : "PENG!", d.x, 170, d.z);
         herzVerlieren();
       }
     }
@@ -723,6 +737,77 @@ function truheWirdLebendig() {
                       : "Die Truhe lebt! Halte die <b>Leertaste</b> gedrückt und saug sie ein!");
 }
 
+// ---- 8f. Der Pümpel (Level 9) ----------------------------------------
+// Im Drachen-Zimmer gibt es keinen Staubsauger, sondern einen Pümpel. Damit haut man zu: PLOPP!
+// Taste gedrückt halten = immer wieder hauen.
+function schlagPunkt() {
+  return { x: maennchen.x + maennchen.richtungX * 80, z: maennchen.z + maennchen.richtungZ * 70 };
+}
+function hauenBewegen() {
+  if (maennchen.schlag > 0) maennchen.schlag = maennchen.schlag - 1;
+  if (maennchen.schlagPause > 0) maennchen.schlagPause = maennchen.schlagPause - 1;
+  if (!ZIMMER[zimmer].puempel || !maennchen.hatSauger || geschafft || wechselt || maennchen.klebt > 0) return;
+  if (!gedrueckt.saugen || maennchen.schlagPause > 0) return;
+  maennchen.schlag = 16;
+  maennchen.schlagPause = SCHLAG_PAUSE;
+  schrittTon();
+  const sp = schlagPunkt();
+  for (const k of bosse) {
+    if (!k.drache || k.besiegt || k.liegt > 0) continue;
+    const tief = sp.z < k.z ? k.tiefFaktor : 1;
+    if (Math.hypot(sp.x - k.x, (sp.z - k.z) * tief) > k.radius + 45) continue;
+    // Getroffen! PLOPP!
+    k.kraft = Math.max(0, k.kraft - PUEMPEL_KRAFT);
+    k.getroffen = 10;
+    ploppTon();
+    sprechblase("PLOPP!", k.x + zufall(-40, 40), 240, k.z);
+    for (let i = 0; i < 8; i++) sternchen(sp.x, 90, sp.z, i % 2 ? "#ffd34d" : "#ff5a5a");
+    // Er weicht ein kleines Stück zurück
+    const weit = Math.hypot(k.x - maennchen.x, k.z - maennchen.z) || 1;
+    k.x = Math.max(90, Math.min(BREITE - 90, k.x + ((k.x - maennchen.x) / weit) * 14));
+    k.z = Math.max(k.zMin, Math.min(TIEFE - 60, k.z + ((k.z - maennchen.z) / weit) * 14));
+    if (k.kraft <= 0) {
+      k.leben = k.leben - 1;
+      if (k.leben > 0) {
+        k.liegt = 170;
+        plumpsTon();
+        sprechblase("Uff!", k.x, 200, k.z);
+        tippZeigen("Der Drache ist umgefallen! Aber Achtung: Er hat noch <b>" + (k.leben === 1 ? "einen Balken" : k.leben + " Balken") + "</b>.");
+      } else {
+        k.besiegt = true;
+        riesenSchluerf();
+        sprechblase("Neiiiin!", k.x, 300, k.z);
+      }
+    }
+  }
+}
+
+// Ein Feuerball vom Drachen
+function feuerballMalen(d) {
+  schattenMalen(d.x, d.z, 22, 0.25);
+  const p = aufsBild(d.x, 60 + Math.sin(d.wackeln) * 6, d.z);
+  const r = 26 * p.groesse * (1 + Math.sin(zeit * 0.5) * 0.08);
+  const glut = malen.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 1.8);
+  glut.addColorStop(0, "rgba(255, 245, 180, 1)"); glut.addColorStop(0.35, "rgba(255, 170, 40, 0.95)");
+  glut.addColorStop(0.7, "rgba(240, 60, 20, 0.6)"); glut.addColorStop(1, "rgba(240, 60, 20, 0)");
+  malen.fillStyle = glut;
+  malen.beginPath(); malen.arc(p.x, p.y, r * 1.8, 0, 6.28); malen.fill();
+}
+
+// Der Pümpel in der Hand: in Ruhe hält das Männchen ihn hoch – beim Schlag haut er nach vorne
+function puempelInDerHandMalen() {
+  const nachLinks = maennchen.richtungX < -0.3 || (Math.abs(maennchen.richtungX) <= 0.3 && maennchen.nachLinks);
+  const seite = nachLinks ? -1 : 1;
+  const hand = aufsBild(maennchen.x + seite * 38 + maennchen.richtungX * 10, maennchen.hoehe + 70, maennchen.z + maennchen.richtungZ * 20);
+  const t = maennchen.schlag > 0 ? Math.sin((1 - maennchen.schlag / 16) * Math.PI) : 0;   // 0 → 1 → 0
+  const b = bild.puempel, h = 120 * hand.groesse, w = h * b.width / b.height;
+  malen.save();
+  malen.translate(hand.x, hand.y);
+  malen.rotate(Math.PI + seite * (0.25 + t * 1.5));     // umgedreht: der Saugnapf zeigt nach oben
+  malen.drawImage(b, -w / 2, -h * 0.15, w, h);
+  malen.restore();
+}
+
 // ---- 8e. Die Bewegungsfalle (Level 8) --------------------------------
 // Eine Metall-Platte am Boden, links und rechts an Seilen. Sie fährt immer im Viereck:
 // nach rechts, nach vorne, nach links, nach hinten. Wer draufsteht, fährt mit –
@@ -794,6 +879,7 @@ function platteMalen() {
 
 // Welches Bild gehört zu diesem Gegner?
 function bossBild(k) {
+  if (k.drache) return k.maulAuf > 0 || k.besiegt ? bild.dracheFeuer : bild.drache;
   if (!k.truhe) return bild.koenig;
   if (k.besiegt || k.zappeln) return bild.truheAuf;                        // beim Einsaugen reißt sie den Deckel auf
   return Math.floor(zeit / 10) % 2 === 0 ? bild.truheAuf : bild.truheZu;   // sonst: auf, zu, auf, zu …
@@ -867,6 +953,9 @@ function pflatschTon()  { piep(240, 120, 0.15, "sine", 0, 0.25); piep(500, 300, 
 function klapperTon()   { piep(520, 260, 0.04, "square", 0, 0.05); }
 function bummTon()      { piep(140, 40, 0.3, "square", 0, 0.22); piep(90, 30, 0.35, "sine", 0.02, 0.3); }
 function sprungTon()    { piep(300, 700, 0.15, "sine", 0, 0.18); }
+function ploppTon()     { piep(700, 180, 0.12, "sine", 0, 0.3); piep(160, 70, 0.15, "square", 0.03, 0.15); }
+function feuerTon()     { piep(260, 90, 0.4, "sawtooth", 0, 0.16); piep(1200, 400, 0.3, "sawtooth", 0.02, 0.06); }
+function brummTon()     { piep(90, 140, 0.35, "sawtooth", 0, 0.1); }
 function puffTon()      { piep(500, 80, 0.25, "sawtooth", 0, 0.25); }
 function warnTon()      { piep(880, 880, 0.08, "square", 0, 0.14); piep(880, 880, 0.08, "square", 0.14, 0.14); piep(1100, 1100, 0.12, "square", 0.28, 0.14); }
 function siegesMelodie() {
@@ -1085,8 +1174,9 @@ function maennchenBewegen() {
     maennchen.hatSauger = true;
     aufhebTon();
     for (let i = 0; i < 14; i++) sternchen(sauger.x, 40, sauger.z, "#ffd34d");
-    tippZeigen(istTouch ? "Halte <b>SAUGEN</b> gedrückt und zeig auf einen Geist!"
-                        : "Halte die <b>Leertaste</b> gedrückt und zeig auf einen Geist!");
+    if (ZIMMER[zimmer].puempel) tippZeigen(istTouch ? "Lauf zum Drachen und drück <b>HAUEN</b>!" : "Lauf zum Drachen und drück die <b>Leertaste</b> zum Hauen!");
+    else tippZeigen(istTouch ? "Halte <b>SAUGEN</b> gedrückt und zeig auf einen Geist!"
+                             : "Halte die <b>Leertaste</b> gedrückt und zeig auf einen Geist!");
     if (truhe) truheWirdLebendig();       // Level 5: Jetzt wacht die Truhe auf!
   }
 
@@ -1171,7 +1261,7 @@ function zumRohrZiehen(ding, staerke) {
 
 // ---- 13. Geister und Geld bewegen -----------------------------------
 function geisterBewegen() {
-  saugtGerade = maennchen.hatSauger && gedrueckt.saugen && !geschafft && !wechselt && !(maennchen.klebt > 0);
+  saugtGerade = maennchen.hatSauger && gedrueckt.saugen && !geschafft && !wechselt && !(maennchen.klebt > 0) && !ZIMMER[zimmer].puempel;
   const boese = ZIMMER[zimmer].geisterBeissen;      // in Level 3 nehmen auch kleine Geister Herzen weg
 
   for (const g of geister) {
@@ -1294,6 +1384,23 @@ function einenBossBewegen(k) {
       }
     }
     return;
+  }
+
+  // Level 9: Der Drache spuckt Feuerbälle – immer genau auf das Männchen zu
+  if (k.drache) {
+    if (k.getroffen > 0) k.getroffen = k.getroffen - 1;
+    if (k.maulAuf > 0) k.maulAuf = k.maulAuf - 1;
+    k.feuerUhr = k.feuerUhr - 1;
+    if (k.feuerUhr === 30) brummTon();                  // er holt Luft …
+    if (k.feuerUhr <= 0 && !wechselt && !geschafft) {
+      k.feuerUhr = FEUER_PAUSE + Math.floor(zufall(-20, 20));
+      k.maulAuf = 30;
+      const zuX = maennchen.x - k.x, zuZ = maennchen.z - (k.z + 30);
+      const weit = Math.hypot(zuX, zuZ) || 1;
+      dynamit.push({ art: "feuer", x: k.x + (zuX / weit) * 70, z: k.z + 30 + (zuZ / weit) * 40,
+                     dx: (zuX / weit) * FEUER_TEMPO, dz: (zuZ / weit) * FEUER_TEMPO, wackeln: 0, alter: 0 });
+      feuerTon();
+    }
   }
 
   // In Level 3 jagt er nur manchmal – dazwischen schwebt er einfach herum
@@ -1526,7 +1633,8 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
   glitzer = []; saugStreifen = []; sprechblasen = [];
   geister = []; bosse = []; geld = []; rechnung = null; kiste = null; kanonen = []; dynamit = [];
   truhe = null; stufe = 0; platte = null;
-  maennchen.hoehe = 0; maennchen.sprungTempo = 0; sprungWunsch = false;
+  maennchen.hoehe = 0; maennchen.sprungTempo = 0; sprungWunsch = false; maennchen.schlag = 0; maennchen.schlagPause = 0;
+  document.getElementById("saugen").textContent = ZIMMER[nummer].puempel ? "HAUEN" : "SAUGEN";
   document.body.classList.toggle("kannSpringen", !!ZIMMER[nummer].springen);
   sauger.x = 730; sauger.z = 450; sauger.versteckt = false; sauger.flug = 1;
   gefangen = 0;
@@ -1868,6 +1976,27 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     }, 700);
   }
 
+  if (nummer === 22) {
+    // Level 9 – so hat Arthur es gezeichnet: oben links der Drache, unten rechts der Pümpel.
+    maennchen.x = 300; maennchen.z = 520;
+    maennchen.hatSauger = false;
+    maennchen.richtungX = 1; maennchen.richtungZ = 0; maennchen.blickt = "seite"; maennchen.nachLinks = false;
+    sauger.x = 730; sauger.z = 470;
+    bosse = [bossMachen({
+      name: "Drache", drache: true, x: 260, z: 200, groesse: 300, kraftMax: 240, leben: 2, schwebt: 0, zMin: 120, tiefFaktor: 0.7,
+      radius: 95, jagt: 0.7, jagdPhasen: true, dx: 0.6, dz: 0.4, stoss: 16, ruf: "ROAAR!",
+      balkenOben: true, wirdZuGeld: true,
+    })];
+    bosse[0].feuerUhr = 200; bosse[0].maulAuf = 0; bosse[0].getroffen = 0;
+    bosse[0].schubsPause = 200; bosse[0].jagdUhr = 240;
+    zaehlerZeigen("Der Drache!");
+    tippZeigen("Ein <b>Drache</b>! Hol dir den <b>Pümpel</b> unten rechts!");
+    bannerZeigen("Level 9");
+    setTimeout(() => {
+      if (zimmer === 22 && bosse[0]) { brummTon(); sprechblase("ROAAAR! Ich bin der Drache!", bosse[0].x, 330, bosse[0].z); }
+    }, 900);
+  }
+
   bosseAmAnfang = bosse.length;
   if (nochmalVersuchen) {
     bannerZeigen("Nochmal!");
@@ -2198,6 +2327,7 @@ function netzUeberMaennchenMalen() {
 
 // Der Staubsauger in der Hand
 function saugerInDerHandMalen() {
+  if (ZIMMER[zimmer].puempel) { puempelInDerHandMalen(); return; }
   const brummen = saugtGerade ? zufall(-1.5, 1.5) : 0;
   const daneben = Math.abs(maennchen.richtungX) < 0.5 ? 40 : 0;   // nach vorne/hinten: neben sich tragen
   const p = aufsBild(maennchen.x + maennchen.richtungX * 52 + daneben + brummen, maennchen.hoehe, maennchen.z + maennchen.richtungZ * 25);
@@ -2273,6 +2403,7 @@ function bossMalen(k) {
 
   // Geister schweben und wippen – die Truhe hüpft
   const schweben = k.truhe ? Math.abs(Math.sin(k.wippen * 4)) * 16
+                 : k.drache ? Math.abs(Math.sin(k.wippen * 3)) * 8 * (1 - kipp)
                            : (k.schwebt + Math.sin(k.wippen) * 12) * (1 - kipp);
   const b = bossBild(k);
   let zittern = k.zappeln ? zufall(-5, 5) : 0;
@@ -2286,7 +2417,7 @@ function bossMalen(k) {
   schattenMalen(k.x, k.z, groesse * 0.38, 0.3);
   const p = aufsBild(k.x + zittern, schweben, k.z);
   // Ein goldenes Leuchten um ihn herum – beim Blinken leuchtet es rot
-  if (kipp === 0 && !k.truhe) {
+  if (kipp === 0 && !k.truhe && !k.drache) {
     malen.fillStyle = k.blinktGerade ? "rgba(255, 40, 80, " + (zeit % 8 < 4 ? 0.45 : 0.15) + ")"
                                      : "rgba(255, 211, 77, " + (0.12 + 0.06 * Math.sin(zeit * 0.1)) + ")";
     malen.beginPath(); malen.arc(p.x, p.y - groesse * p.groesse * 0.5, groesse * p.groesse * 0.55, 0, 6.28); malen.fill();
@@ -2294,6 +2425,8 @@ function bossMalen(k) {
   malen.globalAlpha = k.blinktGerade && zeit % 8 < 4 ? 0.35 : 0.95;       // beim Blinken flackert er
   if (k.wut > 0) malen.filter = "hue-rotate(150deg) saturate(1.5)";       // nach dem Schubsen leuchtet er rot vor Wut
   if (k.besiegt && k.wirdZuGeld && zeit % 6 < 3) malen.filter = "sepia(1) saturate(4) brightness(1.3)";   // er wird golden
+  if (k.drache) malen.globalAlpha = 1;
+  if (k.getroffen > 0 && zeit % 4 < 2) malen.filter = "brightness(2.2)";                                  // PLOPP – er blitzt weiß
   if (kipp > 0) {
     malen.save();
     malen.translate(p.x, p.y);
@@ -2302,7 +2435,7 @@ function bossMalen(k) {
     malen.restore();
   } else {
     // Geister schauen dahin, wo sie hinschweben – die Truhe schaut immer zum Männchen
-    bildMalenAufFuessen(b, p.x, p.y, groesse * p.groesse, k.truhe ? maennchen.x < k.x : k.dx < 0);
+    bildMalenAufFuessen(b, p.x, p.y, groesse * p.groesse, k.truhe ? maennchen.x < k.x : k.drache ? maennchen.x > k.x : k.dx < 0);
   }
   malen.filter = "none";
   malen.globalAlpha = 1;
@@ -2606,7 +2739,8 @@ function allesMalen() {
     }
     // Springt er gerade aus der Truhe, fliegt er im hohen Bogen
     const p = aufsBild(sauger.x, Math.sin(sauger.flug * Math.PI) * 190, sauger.z);
-    bildMalenAufFuessen(bild.sauger, p.x, p.y + 4, sauger.groesse * p.groesse, false);
+    if (ZIMMER[zimmer].puempel) bildMalenAufFuessen(bild.puempel, p.x, p.y + 4, 120 * p.groesse, false);
+    else bildMalenAufFuessen(bild.sauger, p.x, p.y + 4, sauger.groesse * p.groesse, false);
   }
 
   // Was weiter hinten ist, malen wir zuerst – was vorne ist, kommt obendrauf.
@@ -2617,7 +2751,7 @@ function allesMalen() {
   if (kiste) figuren.push({ z: kiste.z, malen: kisteMalen });
   for (const k of kanonen) figuren.push({ z: k.z, malen: () => kanoneMalen(k) });
   if (truhe) figuren.push({ z: truhe.z, malen: truheMalen });
-  for (const d of dynamit) figuren.push({ z: d.z, malen: () => (d.art === "netz" ? netzMalen(d) : dynamitMalen(d)) });
+  for (const d of dynamit) figuren.push({ z: d.z, malen: () => (d.art === "netz" ? netzMalen(d) : d.art === "feuer" ? feuerballMalen(d) : dynamitMalen(d)) });
   figuren.push({
     z: maennchen.z,
     malen: () => {
@@ -2809,7 +2943,7 @@ function spielSchleife() {
   if (!pause) geisterBewegen(); else saugtGerade = false;
   if (!wechselt && !pause) bosseBewegen();
   kisteBewegen();
-  if (!pause) { kanonenBewegen(); dynamitBewegen(); truheBewegen(); platteBewegen(); }
+  if (!pause) { kanonenBewegen(); dynamitBewegen(); truheBewegen(); platteBewegen(); hauenBewegen(); }
   geldBewegen();
   effekteBewegen();
   saugTonAnpassen();
