@@ -233,7 +233,8 @@
 //            Zimmer 20 – über die Lava springen
 //            Zimmer 21 – die Bewegungsfalle und der Donner-Geist
 //  Level 9:  Zimmer 22 – der Drache und der Pümpel
-//  Level 2 bis 9 hat Arthur selbst gezeichnet und erfunden.
+//  Level 10: Zimmer 23 – Drache, zwei Kanonen, Ventilator und Zeitlupen-Knopf
+//  Level 2 bis 10 hat Arthur selbst gezeichnet und erfunden.
 // ================================================================
 
 // ---- 0. Stellschrauben -------------------------------------------
@@ -242,10 +243,11 @@ const SAUGKRAFT = 0.32;         // so schnell wird ein Kraft-Balken leer (größ
 const HERZEN_AM_ANFANG = 3;     // so viele Herzen hat das Männchen in Level 2
 const SCHONZEIT = 120;          // so lange ist man nach einem Treffer sicher (60 = 1 Sekunde)
 // Das Geld am Ende: wie viele Stücke, welche Münzen und Scheine, und wie viel höchstens zusammen
-const GELD_LEVEL_2 = { stuecke: [3, 4], sorten: [1, 2, 5, 10], hoechstens: 20 };
-const GELD_LEVEL_3 = { stuecke: [4, 5], sorten: [1, 2, 5, 10], hoechstens: 30 };
+// (Seit Level 10 gilt überall: Das Ergebnis ist höchstens 10.)
+const GELD_LEVEL_2 = { stuecke: [2, 3], sorten: [1, 2, 5], hoechstens: 10 };
+const GELD_LEVEL_3 = { stuecke: [2, 3], sorten: [1, 2, 5], hoechstens: 10 };
 // Die Aufgabe vom Kistenteufel: drei Zahlen zwischen "von" und "bis"
-const TEUFEL_ZAHLEN = { von: 10, bis: 16 };
+const TEUFEL_ZAHLEN = { von: 1, bis: 3 };        // drei Zahlen von 1 bis 3 – zusammen höchstens 9
 // Level 4: die Dynamitkanone
 const DYNAMIT_TEMPO = 2.6;      // so schnell fliegt das Dynamit (das Männchen läuft mit 3.6 – man kann also ausweichen)
 const DYNAMIT_PAUSE = 100;      // so lange wartet die Kanone zwischen zwei Schüssen (60 = 1 Sekunde)
@@ -266,6 +268,10 @@ const PUEMPEL_KRAFT = 20;       // so viel nimmt ein Pümpel-Schlag vom Balken w
 const SCHLAG_PAUSE = 24;        // so lange dauert es bis zum nächsten Schlag
 const FEUER_TEMPO = 3.0;        // so schnell fliegt ein Feuerball (das Männchen läuft mit 3.6)
 const FEUER_PAUSE = 120;        // so lange wartet der Drache zwischen zwei Feuerbällen
+// Level 10: Ventilator und Zeitlupen-Knopf
+const FLUG_HOEHE = 110;         // so hoch pustet einen der Ventilator
+const ZEITLUPE_DAUER = 600;     // so lange fliegt alles langsamer (600 = 10 Sekunden)
+const ZEITLUPE_TEMPO = 0.4;     // so langsam fliegt dann alles (0.4 = weniger als halb so schnell)
 
 // ---- 1. Unsere Bilder --------------------------------------------
 const BILDER = {
@@ -390,6 +396,8 @@ const ZIMMER = {
   21: { level: 8, hinten: "#1e2a24", links: "#1a241f", rechts: "#151e1a", streifen: "rgba(111,211,255,0.10)",
         herzen: true, geisterBeissen: true, kerzen: true, springen: true, geld: GELD_LEVEL_3 },
   // Level 9 – nur ein Raum: der Drache! Statt Staubsauger gibt es einen Pümpel.
+  23: { level: 10, hinten: "#183a3a", links: "#143131", rechts: "#102828", streifen: "rgba(111,211,255,0.10)",
+        herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
   22: { level: 9, hinten: "#3b2418", links: "#331f15", rechts: "#2b1a11", streifen: "rgba(255,140,40,0.10)",
         herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
 };
@@ -416,6 +424,7 @@ const maennchen = {
   klebt: 0,               // zählt runter, solange man im Netz festklebt
   hoehe: 0,               // Level 8: so hoch ist es gerade in der Luft (0 = auf dem Boden)
   sprungTempo: 0,         // so schnell geht es gerade nach oben (oder unten)
+  fliegt: false,          // Level 10: schwebt es gerade über dem Ventilator?
   schlag: 0,              // Level 9: zählt runter, während der Pümpel zuschlägt
   schlagPause: 0,
 };
@@ -678,13 +687,18 @@ function teufelSpringtRaus() {
   let zahlen;
   do {
     zahlen = [0, 0, 0].map(() => Math.floor(zufall(TEUFEL_ZAHLEN.von, TEUFEL_ZAHLEN.bis + 1)));
-  } while (summe(zahlen.map((n) => n % 10)) > 9);
+  } while (summe(zahlen.map((n) => n % 10)) > 9 || summe(zahlen) > 10);
   rechnung = { art: "teufel", zahlen, summe: summe(zahlen), teile: [], phase: "fragen" };
   // Falsche Antworten: eine ganz knapp daneben, eine um genau zehn daneben
   const s = rechnung.summe;
-  const knapp = mischen([s - 2, s - 1, s + 1, s + 2])[0];
-  const zehner = Math.random() < 0.5 ? s - 10 : s + 10;
-  antwortenZeigen([knapp, zehner], "");
+  if (s <= 10) {
+    // Kleine Zahlen: zwei falsche Antworten ganz knapp daneben
+    antwortenZeigen(mischen([s - 2, s - 1, s + 1, s + 2].filter((n) => n > 0)).slice(0, 2), "");
+  } else {
+    const knapp = mischen([s - 2, s - 1, s + 1, s + 2])[0];
+    const zehner = Math.random() < 0.5 ? s - 10 : s + 10;
+    antwortenZeigen([knapp, zehner], "");
+  }
   zaehlerZeigen("Rechne!");
   tippZeigen("Der <b>Kistenteufel</b> fragt: " + zahlen.join(" + ") + " = ?");
 }
@@ -840,10 +854,11 @@ function kanonenBewegen() {
 const NETZ_AUF = 38;      // nach so vielen Bildern geht das Netz auf
 
 function dynamitBewegen() {
+  const tempo = zeitlupe > 0 ? ZEITLUPE_TEMPO : 1;      // Level 10: der Zeitlupen-Knopf
   for (const d of dynamit) {
-    d.x = d.x + d.dx;
-    d.z = d.z + d.dz;
-    d.wackeln = d.wackeln + 0.2;
+    d.x = d.x + d.dx * tempo;
+    d.z = d.z + d.dz * tempo;
+    d.wackeln = d.wackeln + 0.2 * tempo;
     d.alter = d.alter + 1;
     const netz = d.art === "netz";
     if (!netz && zeit % 4 === 0) glitzer.push({ x: d.x, y: 55, z: d.z, dx: zufall(-1, 1), dy: zufall(0, 2), dz: zufall(-1, 1), leben: 14, farbe: "#ffb347" });
@@ -851,8 +866,10 @@ function dynamitBewegen() {
     const zumMaennchen = Math.hypot(maennchen.x - d.x, maennchen.z - d.z);
     const trefferWeite = netz ? (d.alter < NETZ_AUF ? 36 : 60) : 42;      // ein offenes Netz ist breiter
     // Wer drüberspringt, den trifft es nicht mehr (auch nicht beim Landen)
-    if (zumMaennchen < trefferWeite && maennchen.hoehe >= 35) d.uebersprungen = true;
-    if (zumMaennchen < trefferWeite && unverwundbar === 0 && !wechselt && maennchen.hoehe < 35 && !d.uebersprungen) {
+    // (Über dem Ventilator ist man vor dem Dynamit sicher – Feuerbälle fliegen aber auch hoch hinauf!)
+    const inDerLuft = maennchen.hoehe >= 35 && !(d.art === "feuer" && maennchen.fliegt);
+    if (zumMaennchen < trefferWeite && inDerLuft) d.uebersprungen = true;
+    if (zumMaennchen < trefferWeite && unverwundbar === 0 && !wechselt && !inDerLuft && !d.uebersprungen) {
       if (netz) {
         // Ein Netz kostet kein Herz – aber man klebt fest!
         if (maennchen.klebt === 0) {
@@ -954,6 +971,15 @@ function truheWirdLebendig() {
 function schlagPunkt() {
   return { x: maennchen.x + maennchen.richtungX * 80, z: maennchen.z + maennchen.richtungZ * 70 };
 }
+function kampfBeginnt() {
+  for (const k of bosse) { k.wartet = false; k.feuerUhr = 150; k.jagdUhr = 120; }
+  kanonenWecken();
+  if (ventilator) ventilator.an = true;
+  brummTon();
+  if (bosse[0]) sprechblase("ROAAAR! Jetzt geht's los!", bosse[0].x, 330, bosse[0].z);
+  tippZeigen("Der <b>Ventilator</b> ist an – oben bist du vor dem Dynamit sicher! Und der <b>rote Knopf</b> macht alles langsamer.");
+}
+
 function hauenBewegen() {
   if (maennchen.schlag > 0) maennchen.schlag = maennchen.schlag - 1;
   if (maennchen.schlagPause > 0) maennchen.schlagPause = maennchen.schlagPause - 1;
@@ -1017,6 +1043,88 @@ function puempelInDerHandMalen() {
   malen.rotate(Math.PI + seite * (0.25 + t * 1.5));     // umgedreht: der Saugnapf zeigt nach oben
   malen.drawImage(b, -w / 2, -h * 0.15, w, h);
   malen.restore();
+}
+
+// ---- 8g. Ventilator und Zeitlupen-Knopf (Level 10) --------------------
+// Der Ventilator geht an, sobald der Kampf beginnt. Wer draufsteht, wird hochgepustet –
+// da oben kann einem das Dynamit nichts anhaben. Der rote Knopf macht Dynamit und Feuerbälle langsamer.
+let ventilator = null;
+let knopf = null;
+let zeitlupe = 0;           // zählt runter, solange alles langsamer fliegt
+
+function knopfBewegen() {
+  if (zeitlupe > 0) {
+    zeitlupe = zeitlupe - 1;
+    if (zeitlupe === 0) { tippZeigen("Die Zeitlupe ist vorbei! Drück nochmal auf den <b>roten Knopf</b>."); piep(600, 300, 0.3, "triangle"); }
+  }
+  if (!knopf || wechselt || geschafft) return;
+  if (knopf.pause > 0) knopf.pause = knopf.pause - 1;
+  const drauf = Math.hypot(maennchen.x - knopf.x, maennchen.z - knopf.z) < 48 && maennchen.hoehe < 20;
+  if (drauf && zeitlupe === 0 && knopf.pause === 0) {
+    zeitlupe = ZEITLUPE_DAUER;
+    knopf.pause = ZEITLUPE_DAUER + 60;
+    piep(900, 300, 0.6, "sine", 0, 0.25); piep(450, 150, 0.6, "triangle", 0.1, 0.2);
+    for (let i = 0; i < 16; i++) sternchen(knopf.x, 30, knopf.z, "#6fd3ff");
+    sprechblase("Zeitlupe!", knopf.x, 160, knopf.z);
+    tippZeigen("<b>Zeitlupe!</b> Dynamit und Feuerbälle fliegen jetzt ganz langsam.");
+  }
+}
+
+function ventilatorMalen() {
+  const V = ventilator, g = 75, t = 60;
+  // ein Metall-Gitter im Boden
+  flaeche([[V.x - g, 0, V.z - t], [V.x + g, 0, V.z - t], [V.x + g, 0, V.z + t], [V.x - g, 0, V.z + t]], "#4a5560", 5);
+  flaeche([[V.x - g + 10, 0, V.z - t + 8], [V.x + g - 10, 0, V.z - t + 8], [V.x + g - 10, 0, V.z + t - 8], [V.x - g + 10, 0, V.z + t - 8]], "#20262c");
+  // die Flügel – sie drehen sich, wenn er an ist
+  const drehung = V.an ? zeit * 0.35 : 0.4;
+  for (let i = 0; i < 4; i++) {
+    const w = drehung + i * Math.PI / 2;
+    flaeche([[V.x, 0, V.z], [V.x + Math.cos(w) * 58, 0, V.z + Math.sin(w) * 46],
+             [V.x + Math.cos(w + 0.5) * 58, 0, V.z + Math.sin(w + 0.5) * 46]], "#c9d3dc", 2);
+  }
+  // Gitterstäbe obendrauf
+  for (let i = -2; i <= 2; i++) {
+    linie([V.x + i * 28, 1, V.z - t + 8], [V.x + i * 28, 1, V.z + t - 8], "#111014", 3);
+    linie([V.x - g + 10, 1, V.z + i * 22], [V.x + g - 10, 1, V.z + i * 22], "#111014", 3);
+  }
+  // Luft, die nach oben pustet
+  if (V.an) {
+    for (let i = 0; i < 6; i++) {
+      const hoch = (zeit * 3 + i * 37) % 180;
+      const x = V.x - 50 + i * 20;
+      const a = aufsBild(x, hoch, V.z), b = aufsBild(x, hoch + 28, V.z);
+      malen.strokeStyle = "rgba(255,255,255," + (0.6 - hoch / 300) + ")"; malen.lineWidth = 3;
+      malen.beginPath(); malen.moveTo(a.x, a.y); malen.lineTo(b.x, b.y); malen.stroke();
+    }
+  }
+}
+
+function knopfMalen() {
+  const K = knopf, bereit = zeitlupe === 0 && K.pause === 0;
+  const p = aufsBild(K.x, 0, K.z), oben = aufsBild(K.x, bereit ? 18 : 6, K.z);
+  // der graue Sockel
+  malen.fillStyle = "#111014";
+  malen.beginPath(); malen.ellipse(p.x, p.y, 46 * p.groesse, 18 * p.groesse, 0, 0, 6.28); malen.fill();
+  malen.fillStyle = "#8e99a6";
+  malen.beginPath(); malen.ellipse(p.x, p.y - 3, 40 * p.groesse, 15 * p.groesse, 0, 0, 6.28); malen.fill();
+  // der Knopf: rot, wenn man ihn drücken kann – sonst blau (Zeitlupe läuft) oder grau
+  const farbe = bereit ? "#e8343e" : zeitlupe > 0 ? "#6fd3ff" : "#6b5560";
+  malen.fillStyle = "#111014";
+  malen.fillRect(p.x - 28 * p.groesse, oben.y, 56 * p.groesse, p.y - oben.y - 3);
+  malen.fillStyle = farbe;
+  malen.fillRect(p.x - 25 * p.groesse, oben.y, 50 * p.groesse, p.y - oben.y - 5);
+  malen.beginPath(); malen.ellipse(oben.x, oben.y, 27 * p.groesse, 11 * p.groesse, 0, 0, 6.28); malen.fill();
+  malen.strokeStyle = "#111014"; malen.lineWidth = 3; malen.stroke();
+  if (bereit) {      // er leuchtet, damit man ihn sieht
+    malen.fillStyle = "rgba(255, 80, 80, " + (0.25 + 0.2 * Math.sin(zeit * 0.15)) + ")";
+    malen.beginPath(); malen.ellipse(p.x, p.y, 70 * p.groesse, 26 * p.groesse, 0, 0, 6.28); malen.fill();
+  }
+  // Während der Zeitlupe zeigt ein Ring, wie lange sie noch dauert
+  if (zeitlupe > 0) {
+    const ring = aufsBild(K.x, 80, K.z);
+    malen.strokeStyle = "#6fd3ff"; malen.lineWidth = 6;
+    malen.beginPath(); malen.arc(ring.x, ring.y, 16, -Math.PI / 2, -Math.PI / 2 + 6.283 * zeitlupe / ZEITLUPE_DAUER); malen.stroke();
+  }
 }
 
 // ---- 8e. Die Bewegungsfalle (Level 8) --------------------------------
@@ -1299,6 +1407,16 @@ function maennchenBewegen() {
     maennchen.sprungTempo = maennchen.sprungTempo - SCHWERKRAFT;
     if (maennchen.hoehe <= 0) { maennchen.hoehe = 0; maennchen.sprungTempo = 0; schrittTon(); }
   }
+  // Level 10: Über dem Ventilator wird man hochgepustet und schwebt
+  if (ventilator && ventilator.an && Math.abs(maennchen.x - ventilator.x) < 75 && Math.abs(maennchen.z - ventilator.z) < 60) {
+    if (!maennchen.fliegt) { piep(300, 900, 0.4, "sine", 0, 0.15); }
+    maennchen.fliegt = true;
+    maennchen.sprungTempo = 0;
+    maennchen.hoehe = maennchen.hoehe + (FLUG_HOEHE + Math.sin(zeit * 0.1) * 8 - maennchen.hoehe) * 0.08;
+  } else if (maennchen.fliegt) {
+    maennchen.fliegt = false;          // vom Ventilator runter: jetzt fällt man wieder
+    maennchen.sprungTempo = 0.1;
+  }
   // Auf der Bewegungsfalle fährt man mit
   if (platte && maennchen.hoehe === 0 && aufDerPlatte()) {
     maennchen.x = maennchen.x + platte.dx;
@@ -1389,6 +1507,7 @@ function maennchenBewegen() {
     else tippZeigen(istTouch ? "Halte <b>SAUGEN</b> gedrückt und zeig auf einen Geist!"
                              : "Halte die <b>Leertaste</b> gedrückt und zeig auf einen Geist!");
     if (truhe) truheWirdLebendig();       // Level 5: Jetzt wacht die Truhe auf!
+    if (zimmer === 23) kampfBeginnt();    // Level 10: Jetzt geht es los!
   }
 
   // Geld einsammeln: einfach drüberlaufen!
@@ -1597,6 +1716,8 @@ function einenBossBewegen(k) {
     return;
   }
 
+  // Level 10: Er wartet, bis man den Pümpel hat
+  if (k.wartet) return;
   // Level 9: Der Drache spuckt Feuerbälle – immer genau auf das Männchen zu
   if (k.drache) {
     if (k.getroffen > 0) k.getroffen = k.getroffen - 1;
@@ -1843,7 +1964,7 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
   tuerOffen = false;
   glitzer = []; saugStreifen = []; sprechblasen = [];
   geister = []; bosse = []; geld = []; rechnung = null; kiste = null; kanonen = []; dynamit = [];
-  truhe = null; stufe = 0; platte = null;
+  truhe = null; stufe = 0; platte = null; ventilator = null; knopf = null; zeitlupe = 0; maennchen.fliegt = false;
   maennchen.hoehe = 0; maennchen.sprungTempo = 0; sprungWunsch = false; maennchen.schlag = 0; maennchen.schlagPause = 0;
   document.getElementById("saugen").textContent = ZIMMER[nummer].puempel ? "HAUEN" : "SAUGEN";
   document.body.classList.toggle("kannSpringen", !!ZIMMER[nummer].springen);
@@ -2208,6 +2329,29 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     }, 900);
   }
 
+  if (nummer === 23) {
+    // Level 10 – so hat Arthur es gezeichnet: der Drache, links und rechts eine Dynamitkanone,
+    // in der Mitte der Ventilator mit dem roten Knopf daneben, unten links der Pümpel.
+    maennchen.x = 300; maennchen.z = 520;
+    maennchen.hatSauger = false;
+    maennchen.richtungX = -1; maennchen.richtungZ = 0; maennchen.blickt = "seite"; maennchen.nachLinks = true;
+    sauger.x = 170; sauger.z = 470;
+    ventilator = { x: 400, z: 300, an: false };
+    knopf = { x: 560, z: 330, pause: 0 };
+    kanoneAufstellen("links", 330, 0, 170);
+    kanoneAufstellen("rechts", 330, 85, 170);
+    bosse = [bossMachen({
+      name: "Drache", drache: true, x: 600, z: 150, groesse: 300, kraftMax: 240, leben: 2, schwebt: 0, zMin: 120, tiefFaktor: 0.7,
+      radius: 95, jagt: 0.7, jagdPhasen: true, dx: 0.6, dz: 0.4, stoss: 16, ruf: "ROAAR!",
+      balkenOben: true, wirdZuGeld: true,
+    })];
+    bosse[0].wartet = true; bosse[0].feuerUhr = 99999; bosse[0].maulAuf = 0; bosse[0].getroffen = 0;
+    bosse[0].schubsPause = 200;
+    zaehlerZeigen("Der Drache ist zurück!");
+    tippZeigen("Der <b>Drache</b> ist wieder da! Hol dir den <b>Pümpel</b> unten links – dann geht der Kampf los.");
+    bannerZeigen("Level 10");
+  }
+
   bosseAmAnfang = bosse.length;
   if (nochmalVersuchen) {
     bannerZeigen("Nochmal!");
@@ -2365,6 +2509,9 @@ function zimmerMalen() {
   if (Z.lava) lavaMalen(Z);
   // Die Bewegungsfalle (Level 8)
   if (platte) platteMalen();
+  // Ventilator und Knopf (Level 10)
+  if (ventilator) ventilatorMalen();
+  if (knopf) knopfMalen();
   // Ein roter Teppich
   if (Z.teppich) {
     flaeche([[200, 0, 120], [700, 0, 120], [700, 0, 470], [200, 0, 470]], "#c2185b", 4);
@@ -3154,7 +3301,7 @@ function spielSchleife() {
   if (!pause) geisterBewegen(); else saugtGerade = false;
   if (!wechselt && !pause) bosseBewegen();
   kisteBewegen();
-  if (!pause) { kanonenBewegen(); dynamitBewegen(); truheBewegen(); platteBewegen(); hauenBewegen(); }
+  if (!pause) { kanonenBewegen(); dynamitBewegen(); truheBewegen(); platteBewegen(); hauenBewegen(); knopfBewegen(); }
   geldBewegen();
   effekteBewegen();
   saugTonAnpassen();
