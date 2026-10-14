@@ -270,7 +270,7 @@ const FEUER_TEMPO = 3.0;        // so schnell fliegt ein Feuerball (das Männche
 const FEUER_PAUSE = 120;        // so lange wartet der Drache zwischen zwei Feuerbällen
 // Level 10: Ventilator und Zeitlupen-Knopf
 const FLUG_HOEHE = 110;         // so hoch pustet einen der Ventilator
-const ZEITLUPE_DAUER = 600;     // so lange fliegt alles langsamer (600 = 10 Sekunden)
+const ZEITLUPE_DAUER = 900;     // so lange fliegt alles langsamer (900 = 15 Sekunden)
 const ZEITLUPE_TEMPO = 0.4;     // so langsam fliegt dann alles (0.4 = weniger als halb so schnell)
 
 // ---- 1. Unsere Bilder --------------------------------------------
@@ -396,8 +396,9 @@ const ZIMMER = {
   21: { level: 8, hinten: "#1e2a24", links: "#1a241f", rechts: "#151e1a", streifen: "rgba(111,211,255,0.10)",
         herzen: true, geisterBeissen: true, kerzen: true, springen: true, geld: GELD_LEVEL_3 },
   // Level 9 – nur ein Raum: der Drache! Statt Staubsauger gibt es einen Pümpel.
+  // Level 10 ist leichter gemacht (Arthurs Rückmeldung): 5 Herzen, langsames Dynamit, seltenere Schüsse
   23: { level: 10, hinten: "#183a3a", links: "#143131", rechts: "#102828", streifen: "rgba(111,211,255,0.10)",
-        herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
+        herzenAnfang: 5, dynamitTempo: 1.8, herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
   22: { level: 9, hinten: "#3b2418", links: "#331f15", rechts: "#2b1a11", streifen: "rgba(255,140,40,0.10)",
         herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
 };
@@ -441,6 +442,8 @@ const BEINE = {
 // Jede Berührung von einem Kronen-Geist kostet ein Herz.
 // Ohne Herzen ist die nächste Berührung das Ende – dann fängt das Zimmer von vorne an.
 let herzen = HERZEN_AM_ANFANG;
+// Manche Zimmer schenken mehr Herzen (Level 10 hat 5)
+function herzenMax() { return ZIMMER[zimmer].herzenAnfang || HERZEN_AM_ANFANG; }
 let unverwundbar = 0;     // zählt runter: so lange blinkt das Männchen und ist sicher
 let herzHuepfer = 0;      // kleiner Hüpfer in der Herz-Anzeige, wenn eins weg ist
 let treffBlitz = 0;       // kurzes rotes Aufblitzen bei einem Treffer
@@ -838,7 +841,7 @@ function kanonenBewegen() {
       k.rueckstoss = 12;
       if (k.art === "netz") pflatschTon(); else bummTon();
       const richtX = Math.cos(k.winkel), richtZ = Math.sin(k.winkel);
-      const tempo = k.art === "netz" ? NETZ_TEMPO : DYNAMIT_TEMPO;
+      const tempo = k.art === "netz" ? NETZ_TEMPO : (ZIMMER[zimmer].dynamitTempo || DYNAMIT_TEMPO);
       dynamit.push({
         art: k.art,               // Dynamit oder Netz
         x: k.x + richtX * A.rohr, z: k.z + richtZ * A.rohr,
@@ -1725,12 +1728,12 @@ function einenBossBewegen(k) {
     k.feuerUhr = k.feuerUhr - 1;
     if (k.feuerUhr === 30) brummTon();                  // er holt Luft …
     if (k.feuerUhr <= 0 && !wechselt && !geschafft) {
-      k.feuerUhr = FEUER_PAUSE + Math.floor(zufall(-20, 20));
+      k.feuerUhr = (k.feuerPause || FEUER_PAUSE) + Math.floor(zufall(-20, 20));
       k.maulAuf = 30;
       const zuX = maennchen.x - k.x, zuZ = maennchen.z - (k.z + 30);
       const weit = Math.hypot(zuX, zuZ) || 1;
       dynamit.push({ art: "feuer", x: k.x + (zuX / weit) * 70, z: k.z + 30 + (zuZ / weit) * 40,
-                     dx: (zuX / weit) * FEUER_TEMPO, dz: (zuZ / weit) * FEUER_TEMPO, wackeln: 0, alter: 0 });
+                     dx: (zuX / weit) * (k.feuerTempo || FEUER_TEMPO), dz: (zuZ / weit) * (k.feuerTempo || FEUER_TEMPO), wackeln: 0, alter: 0 });
       feuerTon();
     }
   }
@@ -1970,7 +1973,7 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
   document.body.classList.toggle("kannSpringen", !!ZIMMER[nummer].springen);
   sauger.x = 730; sauger.z = 450; sauger.versteckt = false; sauger.flug = 1;
   gefangen = 0;
-  herzen = HERZEN_AM_ANFANG; unverwundbar = 0; treffBlitz = 0;
+  herzen = ZIMMER[nummer].herzenAnfang || HERZEN_AM_ANFANG; unverwundbar = 0; treffBlitz = 0;
   maennchen.stossX = 0; maennchen.stossZ = 0; maennchen.schrittTakt = 0; maennchen.klebt = 0;
   document.getElementById("antworten").hidden = true;
 
@@ -2338,12 +2341,12 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     sauger.x = 170; sauger.z = 470;
     ventilator = { x: 400, z: 300, an: false };
     knopf = { x: 560, z: 330, pause: 0 };
-    kanoneAufstellen("links", 330, 0, 170);
-    kanoneAufstellen("rechts", 330, 85, 170);
+    kanoneAufstellen("links", 330, 0, 320);          // jede Kanone schießt nur alle gut 5 Sekunden …
+    kanoneAufstellen("rechts", 330, 160, 320);       // … und immer abwechselnd
     bosse = [bossMachen({
       name: "Drache", drache: true, x: 600, z: 150, groesse: 300, kraftMax: 240, leben: 2, schwebt: 0, zMin: 120, tiefFaktor: 0.7,
-      radius: 95, jagt: 0.7, jagdPhasen: true, dx: 0.6, dz: 0.4, stoss: 16, ruf: "ROAAR!",
-      balkenOben: true, wirdZuGeld: true,
+      radius: 95, jagt: 0.45, jagdPhasen: true, dx: 0.6, dz: 0.4, stoss: 16, ruf: "ROAAR!",
+      balkenOben: true, wirdZuGeld: true, feuerPause: 240, feuerTempo: 2.2,
     })];
     bosse[0].wartet = true; bosse[0].feuerUhr = 99999; bosse[0].maulAuf = 0; bosse[0].getroffen = 0;
     bosse[0].schubsPause = 200;
@@ -3009,12 +3012,12 @@ function herzenMalen() {
   const quer = querHandy.matches;
   const x0 = quer ? 800 : 14, y0 = quer ? 10 : 536;
   malen.fillStyle = "rgba(17, 16, 20, 0.8)";
-  malen.beginPath(); malen.roundRect(x0, y0, 146, 52, 26); malen.fill();
+  malen.beginPath(); malen.roundRect(x0, y0, 20 + herzenMax() * 42, 52, 26); malen.fill();
   if (herzen === 0) {     // kein Herz mehr: der Rand blinkt rot als Warnung
     malen.strokeStyle = "rgba(255, 59, 92, " + (0.5 + 0.5 * Math.sin(zeit * 0.25)) + ")";
     malen.lineWidth = 4; malen.stroke();
   }
-  for (let i = 0; i < HERZEN_AM_ANFANG; i++) {
+  for (let i = 0; i < herzenMax(); i++) {
     const geradeWeg = i === herzen && herzHuepfer > 0;      // dieses Herz ist gerade verloren gegangen
     herzMalen(x0 + 31 + i * 42, y0 + 26, geradeWeg ? 1.25 + herzHuepfer / 24 * 0.6 : 1.25, i < herzen);
   }
