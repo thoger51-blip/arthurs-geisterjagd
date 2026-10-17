@@ -23,7 +23,8 @@
 //            Zimmer 21 – die Bewegungsfalle und der Donner-Geist
 //  Level 9:  Zimmer 22 – der Drache und der Pümpel
 //  Level 10: Zimmer 23 – Drache, zwei Kanonen, Ventilator und Zeitlupen-Knopf
-//  Level 2 bis 10 hat Arthur selbst gezeichnet und erfunden.
+//  Level 11: Zimmer 24 – die böse Krake mit dem Piratenhut und die Tintenkanone
+//  Level 2 bis 11 hat Arthur selbst erfunden.
 // ================================================================
 
 // ---- 0. Stellschrauben -------------------------------------------
@@ -60,7 +61,14 @@ const FEUER_PAUSE = 120;        // so lange wartet der Drache zwischen zwei Feue
 // Level 10: Ventilator und Zeitlupen-Knopf
 const FLUG_HOEHE = 110;         // so hoch pustet einen der Ventilator
 const ZEITLUPE_DAUER = 900;     // so lange fliegt alles langsamer (900 = 15 Sekunden)
-const ZEITLUPE_TEMPO = 0.4;     // so langsam fliegt dann alles (0.4 = weniger als halb so schnell)
+const ZEITLUPE_TEMPO = 0.4;
+// Level 11: die Krake
+const KRAKE_PUNKTE = 100;       // so viele Punkte hat die Krake
+const TREFFER_PUNKTE = 20;      // so viele Punkte kostet sie ein Tintenballon (100 / 20 = 5 Treffer)
+const TENTAKEL_WARNEN = 75;     // so lange sieht man die rote Linie, bevor der Tentakel zuschlägt (75 = 1,25 Sekunden)
+const TENTAKEL_PAUSE = 190;     // so lange wartet sie zwischen zwei Tentakel-Angriffen
+const TINTE_PAUSE = 180;        // so oft schießt die Tintenkanone einen Ballon
+const WURF_WEITE = 440;         // so weit fliegt ein Tintenballon höchstens     // so langsam fliegt dann alles (0.4 = weniger als halb so schnell)
 
 // ---- 1. Unsere Bilder --------------------------------------------
 const BILDER = {
@@ -83,6 +91,7 @@ const BILDER = {
   drache:       "__drache__",         // Arthurs Drache (Level 9)
   dracheFeuer:  "__drache_feuer__",   // derselbe Drache mit offenem Maul
   puempel:      "__puempel__",        // der Pümpel
+  krake:        "__krake__",          // die böse Krake mit dem Piratenhut (Level 11)
 };
 
 // Hier laden wir alle Bilder. Erst wenn alle fertig sind, geht's los.
@@ -188,6 +197,9 @@ const ZIMMER = {
   // Level 10 ist leichter gemacht (Arthurs Rückmeldung): 5 Herzen, langsames Dynamit, seltenere Schüsse
   23: { level: 10, hinten: "#183a3a", links: "#143131", rechts: "#102828", streifen: "rgba(111,211,255,0.10)",
         herzenAnfang: 5, dynamitTempo: 1.8, herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
+  // Level 11 – drei Wasserbecken, in der Mitte wohnt die Krake. 5 Herzen.
+  24: { level: 11, hinten: "#1b3b5a", links: "#173350", rechts: "#132b44", streifen: "rgba(255,255,255,0.08)",
+        herzen: true, herzenAnfang: 5, springen: true, tinte: true, geld: GELD_LEVEL_3 },
   22: { level: 9, hinten: "#3b2418", links: "#331f15", rechts: "#2b1a11", streifen: "rgba(255,140,40,0.10)",
         herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
 };
@@ -215,6 +227,7 @@ const maennchen = {
   hoehe: 0,               // Level 8: so hoch ist es gerade in der Luft (0 = auf dem Boden)
   sprungTempo: 0,         // so schnell geht es gerade nach oben (oder unten)
   fliegt: false,          // Level 10: schwebt es gerade über dem Ventilator?
+  tinte: 0,               // Level 11: so viele Tintenballons hat es dabei
   schlag: 0,              // Level 9: zählt runter, während der Pümpel zuschlägt
   schlagPause: 0,
 };
@@ -588,6 +601,7 @@ let dynamit = [];
 //   rohr = so weit vorne kommt das Geschoss heraus · abstand = so weit steht sie von der Wand weg
 const KANONEN_ARTEN = {
   dynamit: { bild: "kanone",       massstab: 0.8, ankerX: 46.4,  ankerY: 79,   winkel0: 1.4407, muendung: 239, rohr: 175, abstand: 50,  schwenk: 0.72 },
+  tinte:   { bild: "kanone",       massstab: 0.8, ankerX: 46.4,  ankerY: 79,   winkel0: 1.4407, muendung: 239, rohr: 175, abstand: 50,  schwenk: 0.5 },
   netz:    { bild: "kanoneSpinne", massstab: 1.0, ankerX: 105.6, ankerY: 70.2, winkel0: 0,      muendung: 109, rohr: 115, abstand: 125, schwenk: 0.55 },
 };
 const DYNAMIT = { massstab: 0.9, ankerX: 21.2, ankerY: 45.9, winkel0: 1.408 };
@@ -625,6 +639,15 @@ function kanonenBewegen() {
     const A = KANONEN_ARTEN[k.art];
     k.winkel = k.grund + Math.asin(Math.sin(k.zeit * 0.012)) * A.schwenk;      // gleichmäßig nach beiden Seiten
     k.schussUhr = k.schussUhr - 1;
+    if (k.schussUhr <= 0 && k.art === "tinte") {
+      k.schussUhr = k.pause;
+      // Nur schießen, wenn nicht schon genug Ballons herumliegen
+      if (ballons.filter((b) => b.vonKanone).length + maennchen.tinte < 3 && krake && !krake.besiegt) {
+        k.rueckstoss = 12; pflatschTon();
+        ballonSchiessen(k.x + Math.cos(k.winkel) * 175, k.z + Math.sin(k.winkel) * 175);
+      }
+      continue;
+    }
     if (k.schussUhr <= 0) {
       k.schussUhr = k.pause;
       k.rueckstoss = 12;
@@ -919,6 +942,319 @@ function knopfMalen() {
   }
 }
 
+// ---- 8h. Die böse Krake (Level 11) ----------------------------------
+// Drei Wasserbecken. Die Krake taucht in einem auf und schlägt mit ihren Tentakeln zu –
+// vorher zeigt eine rote Linie, wohin. Die Tintenkanone schießt Tintenballons: einsammeln,
+// WERFEN gedrückt halten zum Zielen, loslassen – und der Ballon fliegt. Wird die Krake
+// getroffen, taucht sie unter und kommt in einem anderen Becken wieder hoch.
+let becken = [];
+let krake = null;
+let ballons = [];           // Tintenballons: fliegend oder am Boden
+let kleckse = [];           // Tintenflecken auf dem Boden
+let tinteModus = false;     // wirft man gerade Tintenballons (statt zu saugen)?
+const wurf = { zielt: false, kraft: 0, hinweis: 0 };
+
+function krakeAufstellen() {
+  becken = [{ x: 210, z: 205, rx: 105, rz: 62 }, { x: 450, z: 175, rx: 105, rz: 62 }, { x: 690, z: 205, rx: 105, rz: 62 }];
+  krake = { becken: 1, hoch: 0, zustand: "auftauchen", uhr: 0, ersteMal: true, punkte: KRAKE_PUNKTE, angriffUhr: 160,
+            richtX: 0, richtZ: 1, laenge: 0, getroffen: 0, besiegt: false };
+  tinteModus = true;
+}
+
+function imBecken(x, z, extra) {
+  return becken.some((b) => ((x - b.x) / (b.rx + extra)) ** 2 + ((z - b.z) / (b.rz + extra)) ** 2 < 1);
+}
+
+function ballonSchiessen(x, z) {
+  let zx, zz, n = 0;
+  do { zx = zufall(130, 770); zz = zufall(320, 530); n++; } while ((imBecken(zx, zz, 40) || Math.hypot(zx - maennchen.x, zz - maennchen.z) < 60) && n < 50);
+  ballons.push({ x, z, startX: x, startZ: z, zielX: zx, zielZ: zz, flug: 0, hoehe: 70, vonKanone: true, liegt: false, wippen: 0 });
+}
+
+function krakeBewegen() {
+  if (!krake || wechselt || geschafft) return;
+  const K = krake, B = becken[K.becken];
+  if (K.getroffen > 0) K.getroffen = K.getroffen - 1;
+  if (K.zustand === "auftauchen") {
+    K.hoch = Math.min(1, K.hoch + 0.03);
+    if (K.hoch >= 1) { K.zustand = "oben"; K.angriffUhr = K.ersteMal ? 150 : 100; K.ersteMal = false; }
+  } else if (K.zustand === "oben") {
+    K.angriffUhr = K.angriffUhr - 1;
+    if (K.angriffUhr <= 0) {
+      // Sie zielt auf das Männchen – eine rote Linie zeigt, wo der Tentakel gleich hinschlägt
+      const zuX = maennchen.x - B.x, zuZ = maennchen.z - B.z, weit = Math.hypot(zuX, zuZ) || 1;
+      K.richtX = zuX / weit; K.richtZ = zuZ / weit;
+      K.zustand = "zielt"; K.uhr = TENTAKEL_WARNEN;
+      warnTon();
+    }
+  } else if (K.zustand === "zielt") {
+    K.uhr = K.uhr - 1;
+    if (K.uhr <= 0) { K.zustand = "schlaegt"; K.uhr = 0; peitschTon(); }
+  } else if (K.zustand === "schlaegt") {
+    K.uhr = K.uhr + 1;
+    K.laenge = K.uhr < 10 ? K.uhr / 10 : K.uhr < 34 ? 1 : Math.max(0, 1 - (K.uhr - 34) / 14);
+    // Trifft der Tentakel das Männchen? (Drüberspringen geht!)
+    if (K.laenge > 0.2 && unverwundbar === 0 && maennchen.hoehe < 40) {
+      const lang = 600 * K.laenge;
+      const vx = maennchen.x - B.x, vz = maennchen.z - B.z;
+      const entlang = vx * K.richtX + vz * K.richtZ;
+      const quer = vx * -K.richtZ + vz * K.richtX;
+      if (entlang > 40 && entlang < lang && Math.abs(quer) < 36) {
+        const seite = quer < 0 ? -1 : 1;
+        maennchen.stossX = -K.richtZ * seite * 12; maennchen.stossZ = K.richtX * seite * 12;
+        sprechblase("KLATSCH!", maennchen.x, 200, maennchen.z);
+        herzVerlieren();
+      }
+    }
+    if (K.uhr >= 48) { K.zustand = "oben"; K.laenge = 0; K.angriffUhr = TENTAKEL_PAUSE + Math.floor(zufall(-30, 30)); }
+  } else if (K.zustand === "taucht") {
+    K.hoch = Math.max(0, K.hoch - 0.05);
+    if (zeit % 4 === 0) blase(B);
+    if (K.hoch <= 0) { K.zustand = "unten"; K.uhr = 80; }
+  } else if (K.zustand === "unten") {
+    K.uhr = K.uhr - 1;
+    if (K.uhr <= 0) {
+      const andere = [0, 1, 2].filter((i) => i !== K.becken);
+      K.becken = andere[Math.floor(Math.random() * andere.length)];
+      K.zustand = "auftauchen";
+      for (let i = 0; i < 10; i++) blase(becken[K.becken]);
+    }
+  } else if (K.zustand === "besiegt") {
+    K.hoch = Math.max(0, K.hoch - 0.012);
+    if (zeit % 3 === 0) blase(B);
+    if (K.hoch <= 0) krakeIstWeg();
+  }
+}
+
+function blase(b) {
+  glitzer.push({ x: b.x + zufall(-60, 60), y: 5, z: b.z + zufall(-30, 30), dx: 0, dy: zufall(2, 4), dz: 0, leben: 30, farbe: "#bfe9ff" });
+}
+
+// Die Krake ist besiegt: Aus den anderen beiden Becken kommen zwei kleine Geister – und ein Staubsauger!
+function krakeIstWeg() {
+  const altesBecken = becken[krake.becken];
+  krake = null;
+  tinteModus = false;
+  ballons = [];
+  wurf.zielt = false; wurf.kraft = 0;
+  for (let i = 0; i < becken.length; i++) {
+    if (becken[i] === altesBecken) continue;
+    const g = kleinenGeistMachen(becken[i].x, becken[i].z + 20);
+    geister.push(g);
+    for (let j = 0; j < 12; j++) sternchen(g.x, 40, g.z, "#6fd3ff");
+  }
+  lachTon();
+  sauger.versteckt = false; sauger.flug = 0;
+  sauger.startX = altesBecken.x; sauger.startZ = altesBecken.z;
+  sauger.zielX = 450; sauger.zielZ = 460;
+  sauger.x = sauger.startX; sauger.z = sauger.startZ;
+  zaehlerZeigen("Zwei Geister!");
+  tippZeigen("Aus den Becken kommen <b>zwei Geister</b>! Schnell, hol dir den <b>Staubsauger</b>!");
+}
+
+function krakeGetroffen() {
+  const K = krake, B = becken[K.becken];
+  K.punkte = Math.max(0, K.punkte - TREFFER_PUNKTE);
+  K.getroffen = 30;
+  K.laenge = 0;
+  for (let i = 0; i < 24; i++) sternchen(B.x + zufall(-50, 50), zufall(80, 220), B.z, i % 2 ? "#2b2f8f" : "#11124a");
+  kleckse.push({ x: B.x, z: B.z, leben: 200, r: 70 });
+  pflatschTon(); plumpsTon();
+  if (K.punkte <= 0) {
+    K.zustand = "besiegt"; K.besiegt = true;
+    riesenSchluerf();
+    sprechblase("Blubb… blubb… NEIIIN!", B.x, 300, B.z);
+    zaehlerZeigen("Krake: besiegt!");
+  } else {
+    K.zustand = "taucht";
+    sprechblase("BLUBB!", B.x, 280, B.z);
+    zaehlerZeigen("Krake: " + K.punkte + " Punkte");
+    tippZeigen("Treffer! Die Krake taucht unter – wo kommt sie wieder hoch?");
+  }
+}
+
+function ballonsBewegen() {
+  if (wechselt || geschafft) return;
+  for (const b of ballons) {
+    if (b.liegt) {
+      b.wippen = b.wippen + 0.08;
+      // Einsammeln: einfach hinlaufen
+      if (maennchen.tinte < 3 && Math.hypot(maennchen.x - b.x, maennchen.z - b.z) < 55) {
+        b.weg = true; maennchen.tinte = maennchen.tinte + 1;
+        aufhebTon();
+        zaehlerZeigen("Tintenballons: " + maennchen.tinte);
+        if (maennchen.tinte === 1 && wurf.hinweis < 1) {
+          wurf.hinweis = 1;
+          tippZeigen(istTouch ? "Halte <b>WERFEN</b> gedrückt zum Zielen – loslassen, und der Ballon fliegt!"
+                              : "Halte die <b>Leertaste</b> gedrückt zum Zielen – loslassen, und der Ballon fliegt!");
+        }
+      }
+      continue;
+    }
+    // Er fliegt im Bogen
+    b.flug = Math.min(1, b.flug + (b.vonKanone ? 1 / 50 : 1 / 32));
+    b.x = b.startX + (b.zielX - b.startX) * b.flug;
+    b.z = b.startZ + (b.zielZ - b.startZ) * b.flug;
+    b.hoehe = (b.vonKanone ? 70 : 60) * (1 - b.flug) + Math.sin(b.flug * Math.PI) * (b.vonKanone ? 200 : 150);
+    if (b.flug >= 1) {
+      if (b.vonKanone) { b.liegt = true; b.hoehe = 0; continue; }
+      // Ein geworfener Ballon landet: Trifft er die Krake?
+      b.weg = true;
+      const K = krake;
+      if (K && !K.besiegt && K.hoch > 0.4 && K.zustand !== "taucht") {
+        const B = becken[K.becken];
+        if (((b.x - B.x) / (B.rx + 35)) ** 2 + ((b.z - B.z) / (B.rz + 45)) ** 2 < 1) { krakeGetroffen(); continue; }
+      }
+      // Daneben: ein Tintenfleck (oder es platscht ins Wasser)
+      pflatschTon();
+      if (imBecken(b.x, b.z, 0)) { for (let i = 0; i < 8; i++) blase({ x: b.x, z: b.z }); }
+      else kleckse.push({ x: b.x, z: b.z, leben: 240, r: 34 });
+      sprechblase("Daneben!", b.x, 120, b.z);
+    }
+  }
+  ballons = ballons.filter((b) => !b.weg);
+  for (const k of kleckse) k.leben = k.leben - 1;
+  kleckse = kleckse.filter((k) => k.leben > 0);
+}
+
+// WERFEN gedrückt halten: Je länger, desto weiter. Loslassen: Der Ballon fliegt!
+function wurfZiel() {
+  const weit = 110 + wurf.kraft * WURF_WEITE;
+  return { x: Math.max(30, Math.min(BREITE - 30, maennchen.x + maennchen.richtungX * weit)),
+           z: Math.max(20, Math.min(TIEFE - 20, maennchen.z + maennchen.richtungZ * weit * 0.85)) };
+}
+function wurfBewegen() {
+  if (!tinteModus || wechselt || geschafft) { wurf.zielt = false; return; }
+  if (gedrueckt.saugen) {
+    if (maennchen.tinte > 0) {
+      wurf.zielt = true;
+      wurf.kraft = Math.min(1, wurf.kraft + 1 / 55);
+    } else if (wurf.hinweis < 2 && krake) {
+      wurf.hinweis = 2;
+      tippZeigen("Du hast noch keinen <b>Tintenballon</b>. Die Tintenkanone schießt welche – sammle sie ein!");
+    }
+  } else if (wurf.zielt) {
+    const z = wurfZiel();
+    ballons.push({ x: maennchen.x, z: maennchen.z, startX: maennchen.x, startZ: maennchen.z, zielX: z.x, zielZ: z.z,
+                   flug: 0, hoehe: 60, vonKanone: false, liegt: false, wippen: 0 });
+    maennchen.tinte = maennchen.tinte - 1;
+    zaehlerZeigen("Tintenballons: " + maennchen.tinte);
+    piep(400, 700, 0.15, "triangle", 0, 0.2);
+    wurf.zielt = false; wurf.kraft = 0;
+  }
+}
+
+function beckenMalen() {
+  for (const b of becken) {
+    const ecken = [];
+    for (let i = 0; i < 28; i++) { const w = i / 28 * 6.283; ecken.push([b.x + Math.cos(w) * (b.rx + 14), 0, b.z + Math.sin(w) * (b.rz + 12)]); }
+    flaeche(ecken, "#8e99a6", 5);             // der Steinrand
+    const wasser = [];
+    for (let i = 0; i < 28; i++) { const w = i / 28 * 6.283; wasser.push([b.x + Math.cos(w) * b.rx, 0, b.z + Math.sin(w) * b.rz]); }
+    flaeche(wasser, "#2f7fd0");
+    for (let i = 0; i < 3; i++) {             // kleine Wellen
+      const p = aufsBild(b.x - 50 + i * 50 + Math.sin(zeit * 0.05 + i) * 10, 0, b.z - 15 + i * 12);
+      malen.strokeStyle = "rgba(255,255,255,0.5)"; malen.lineWidth = 3;
+      malen.beginPath(); malen.arc(p.x, p.y, 14 * p.groesse, 3.5, 5.9); malen.stroke();
+    }
+  }
+  // Tintenflecken
+  for (const k of kleckse) {
+    const p = aufsBild(k.x, 0, k.z);
+    malen.globalAlpha = Math.min(1, k.leben / 60) * 0.8;
+    malen.fillStyle = "#1b1d5e";
+    malen.beginPath(); malen.ellipse(p.x, p.y, k.r * p.groesse * 1.3, k.r * p.groesse * 0.45, 0, 0, 6.28); malen.fill();
+    malen.globalAlpha = 1;
+  }
+  // Die rote Warn-Linie: Da schlägt der Tentakel gleich hin!
+  if (krake && krake.zustand === "zielt") {
+    const B = becken[krake.becken];
+    malen.globalAlpha = zeit % 10 < 5 ? 0.95 : 0.55;
+    linie([B.x + krake.richtX * 60, 2, B.z + krake.richtZ * 60], [B.x + krake.richtX * 600, 2, B.z + krake.richtZ * 600], "rgba(255, 42, 60, 0.25)", 40);
+    for (let i = 1; i < 15; i++) {
+      const a = 40 + i * 40;
+      linie([B.x + krake.richtX * a, 2, B.z + krake.richtZ * a], [B.x + krake.richtX * (a + 24), 2, B.z + krake.richtZ * (a + 24)], "#ff2a3c", 14);
+    }
+    malen.globalAlpha = 1;
+  }
+}
+
+function krakeMalen() {
+  const K = krake, B = becken[K.becken];
+  const p = aufsBild(B.x, 0, B.z);
+  // der Tentakel
+  if (K.zustand === "schlaegt" && K.laenge > 0) {
+    const lang = 600 * K.laenge, punkte = [];   // (so lang wie die rote Linie)
+    for (let i = 0; i <= 24; i++) {
+      const a = 30 + (lang - 30) * i / 24, welle = Math.sin(i * 0.9 + zeit * 0.4) * 10;
+      punkte.push(aufsBild(B.x + K.richtX * a - K.richtZ * welle, 22, B.z + K.richtZ * a + K.richtX * welle));
+    }
+    for (const [farbe, breite] of [["#111014", 30], ["#9c40aa", 20]]) {
+      malen.strokeStyle = farbe; malen.lineCap = "round"; malen.lineJoin = "round";
+      malen.lineWidth = breite * p.groesse;
+      malen.beginPath(); punkte.forEach((q, i) => (i ? malen.lineTo(q.x, q.y) : malen.moveTo(q.x, q.y))); malen.stroke();
+    }
+    malen.fillStyle = "#ffaac8";
+    for (let i = 2; i < punkte.length; i += 3) { malen.beginPath(); malen.arc(punkte[i].x, punkte[i].y + 3, 4, 0, 6.28); malen.fill(); }
+  }
+  if (K.hoch <= 0) return;
+  // Die Krake – nur der Teil über dem Wasser ist zu sehen
+  const b = bild.krake, h = 310 * p.groesse, w = h * b.width / b.height;
+  const unten = p.y + h * 0.18 + (1 - K.hoch) * h * 1.05 + Math.sin(zeit * 0.06) * 4;
+  malen.save();
+  malen.beginPath(); malen.rect(0, 0, 960, p.y + 4); malen.clip();
+  if (K.getroffen > 0) malen.filter = zeit % 6 < 3 ? "brightness(0.35)" : "none";   // voller Tinte!
+  const zittern = K.zustand === "zielt" ? zufall(-2, 2) : 0;
+  malen.drawImage(b, p.x - w / 2 + zittern, unten - h, w, h);
+  malen.restore();
+  // die Wasserlinie davor
+  malen.strokeStyle = "rgba(255,255,255,0.7)"; malen.lineWidth = 4;
+  malen.beginPath(); malen.ellipse(p.x, p.y, 60 * p.groesse * 1.6, 10 * p.groesse, 0, 0.1, 3.04); malen.stroke();
+  if (K.zustand === "zielt") jagdZeichenMalen(B.x, 270 * K.hoch, B.z);
+  // Der Boss-Balken unten drunter – mit Punkten
+  if (K.hoch > 0.3) {
+    const q = aufsBild(B.x, 0, B.z + B.rz + 34), breite = 150, hoehe = 16;
+    malen.fillStyle = "#111014"; malen.beginPath(); malen.roundRect(q.x - breite / 2 - 4, q.y - 4, breite + 8, hoehe + 8, 10); malen.fill();
+    malen.fillStyle = "#3a2a3a"; malen.beginPath(); malen.roundRect(q.x - breite / 2, q.y, breite, hoehe, 7); malen.fill();
+    malen.fillStyle = "#c86bd6"; malen.beginPath(); malen.roundRect(q.x - breite / 2, q.y, Math.max(8, breite * K.punkte / KRAKE_PUNKTE), hoehe, 7); malen.fill();
+    malen.fillStyle = "#fff4fa"; malen.font = "800 15px 'Baloo 2', sans-serif"; malen.textAlign = "center";
+    malen.fillText(K.punkte + " Punkte", q.x, q.y + 13);
+  }
+}
+
+function ballonMalen(b) {
+  schattenMalen(b.x, b.z, 18, 0.25);
+  const p = aufsBild(b.x, b.hoehe + 18 + (b.liegt ? Math.sin(b.wippen) * 4 : 0), b.z);
+  const r = 17 * p.groesse;
+  if (b.liegt) {           // er leuchtet, damit man ihn sieht
+    malen.fillStyle = "rgba(111, 140, 255, " + (0.25 + 0.15 * Math.sin(zeit * 0.12)) + ")";
+    malen.beginPath(); malen.arc(p.x, p.y, r * 2, 0, 6.28); malen.fill();
+  }
+  malen.fillStyle = "#111014"; malen.beginPath(); malen.ellipse(p.x, p.y, r + 3, r * 1.15 + 3, 0, 0, 6.28); malen.fill();
+  malen.fillStyle = "#2b2f8f"; malen.beginPath(); malen.ellipse(p.x, p.y, r, r * 1.15, 0, 0, 6.28); malen.fill();
+  malen.fillStyle = "rgba(255,255,255,0.6)"; malen.beginPath(); malen.ellipse(p.x - r * 0.35, p.y - r * 0.4, r * 0.25, r * 0.35, -0.4, 0, 6.28); malen.fill();
+  malen.fillStyle = "#111014"; malen.beginPath(); malen.moveTo(p.x - 4, p.y + r * 1.15 + 5); malen.lineTo(p.x + 4, p.y + r * 1.15 + 5); malen.lineTo(p.x, p.y + r * 1.1); malen.fill();
+}
+
+function zielMalen() {
+  if (!wurf.zielt) return;
+  const z = wurfZiel();
+  // gepunktete Flug-Linie und ein Ziel-Kreis am Boden
+  for (let i = 1; i < 12; i++) {
+    const t = i / 12;
+    const q = aufsBild(maennchen.x + (z.x - maennchen.x) * t, 60 + Math.sin(t * Math.PI) * 150, maennchen.z + (z.z - maennchen.z) * t);
+    malen.fillStyle = "rgba(255,255,255,0.85)"; malen.beginPath(); malen.arc(q.x, q.y, 4, 0, 6.28); malen.fill();
+  }
+  const p = aufsBild(z.x, 0, z.z);
+  let trifft = false;
+  if (krake && krake.hoch > 0.4 && !krake.besiegt) {
+    const B = becken[krake.becken];
+    trifft = ((z.x - B.x) / (B.rx + 35)) ** 2 + ((z.z - B.z) / (B.rz + 45)) ** 2 < 1;
+  }
+  malen.strokeStyle = trifft ? "#7dff9a" : "#fff4fa"; malen.lineWidth = 4;
+  malen.beginPath(); malen.ellipse(p.x, p.y, 30 * p.groesse * 1.5, 30 * p.groesse * 0.5, 0, 0, 6.28); malen.stroke();
+}
+
 // ---- 8e. Die Bewegungsfalle (Level 8) --------------------------------
 // Eine Metall-Platte am Boden, links und rechts an Seilen. Sie fährt immer im Viereck:
 // nach rechts, nach vorne, nach links, nach hinten. Wer draufsteht, fährt mit –
@@ -1067,6 +1403,7 @@ function sprungTon()    { piep(300, 700, 0.15, "sine", 0, 0.18); }
 function ploppTon()     { piep(700, 180, 0.12, "sine", 0, 0.3); piep(160, 70, 0.15, "square", 0.03, 0.15); }
 function feuerTon()     { piep(260, 90, 0.4, "sawtooth", 0, 0.16); piep(1200, 400, 0.3, "sawtooth", 0.02, 0.06); }
 function brummTon()     { piep(90, 140, 0.35, "sawtooth", 0, 0.1); }
+function peitschTon()   { piep(1500, 200, 0.18, "sawtooth", 0, 0.15); piep(200, 80, 0.2, "square", 0.1, 0.15); }
 function puffTon()      { piep(500, 80, 0.25, "sawtooth", 0, 0.25); }
 function warnTon()      { piep(880, 880, 0.08, "square", 0, 0.14); piep(880, 880, 0.08, "square", 0.14, 0.14); piep(1100, 1100, 0.12, "square", 0.28, 0.14); }
 function siegesMelodie() {
@@ -1270,6 +1607,16 @@ function maennchenBewegen() {
   // Lava! Wer vom Weg abkommt, verbrennt sich die Füße.
   if (Z.lava && !wechselt && maennchen.hoehe === 0 && !aufDemWeg(maennchen.x, maennchen.z)) inDieLava();
 
+  // Level 11: In die Wasserbecken kann man nicht hineinlaufen
+  for (const b of becken) {
+    const ex = (maennchen.x - b.x) / (b.rx + 28), ez = (maennchen.z - b.z) / (b.rz + 22);
+    const weit = Math.hypot(ex, ez);
+    if (weit < 1) {
+      const f = weit > 0.01 ? 1 / weit : 1;
+      maennchen.x = b.x + ex * f * (b.rx + 28);
+      maennchen.z = b.z + (weit > 0.01 ? ez * f : 1) * (b.rz + 22);
+    }
+  }
   // Um die Kiste muss man außen herumlaufen
   if (kiste) {
     const dx = maennchen.x - kiste.x, dz = maennchen.z - kiste.z;
@@ -1295,6 +1642,7 @@ function maennchenBewegen() {
     maennchen.hatSauger = true;
     aufhebTon();
     for (let i = 0; i < 14; i++) sternchen(sauger.x, 40, sauger.z, "#ffd34d");
+    document.getElementById("saugen").textContent = ZIMMER[zimmer].puempel ? "HAUEN" : "SAUGEN";
     if (ZIMMER[zimmer].puempel) tippZeigen(istTouch ? "Lauf zum Drachen und drück <b>HAUEN</b>!" : "Lauf zum Drachen und drück die <b>Leertaste</b> zum Hauen!");
     else tippZeigen(istTouch ? "Halte <b>SAUGEN</b> gedrückt und zeig auf einen Geist!"
                              : "Halte die <b>Leertaste</b> gedrückt und zeig auf einen Geist!");
@@ -1383,7 +1731,7 @@ function zumRohrZiehen(ding, staerke) {
 
 // ---- 13. Geister und Geld bewegen -----------------------------------
 function geisterBewegen() {
-  saugtGerade = maennchen.hatSauger && gedrueckt.saugen && !geschafft && !wechselt && !(maennchen.klebt > 0) && !ZIMMER[zimmer].puempel;
+  saugtGerade = maennchen.hatSauger && gedrueckt.saugen && !geschafft && !wechselt && !(maennchen.klebt > 0) && !ZIMMER[zimmer].puempel && !tinteModus;
   const boese = ZIMMER[zimmer].geisterBeissen;      // in Level 3 nehmen auch kleine Geister Herzen weg
 
   for (const g of geister) {
@@ -1454,6 +1802,10 @@ function eingesaugt(g) {
   gefangen = gefangen + 1;
   schluerfTon();
   for (let i = 0; i < 10; i++) sternchen(g.x, 50, g.z, "#6fd3ff");
+  if (zimmer === 24 && geister.filter((x) => !x.weg).length === 0) {
+    setTimeout(siegesMelodie, 300);
+    geldRegen(450, 330);
+  }
   if (zimmer === 1) {
     zaehlerZeigen("Gefangen: " + gefangen + " von 5");
     if (geister.filter((x) => !x.weg).length === 0) {
@@ -1757,8 +2109,9 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
   glitzer = []; saugStreifen = []; sprechblasen = [];
   geister = []; bosse = []; geld = []; rechnung = null; kiste = null; kanonen = []; dynamit = [];
   truhe = null; stufe = 0; platte = null; ventilator = null; knopf = null; zeitlupe = 0; maennchen.fliegt = false;
+  becken = []; krake = null; ballons = []; kleckse = []; tinteModus = false; maennchen.tinte = 0; wurf.zielt = false; wurf.kraft = 0; wurf.hinweis = 0;
   maennchen.hoehe = 0; maennchen.sprungTempo = 0; sprungWunsch = false; maennchen.schlag = 0; maennchen.schlagPause = 0;
-  document.getElementById("saugen").textContent = ZIMMER[nummer].puempel ? "HAUEN" : "SAUGEN";
+  document.getElementById("saugen").textContent = ZIMMER[nummer].puempel ? "HAUEN" : ZIMMER[nummer].tinte ? "WERFEN" : "SAUGEN";
   document.body.classList.toggle("kannSpringen", !!ZIMMER[nummer].springen);
   sauger.x = 730; sauger.z = 450; sauger.versteckt = false; sauger.flug = 1;
   gefangen = 0;
@@ -2144,6 +2497,24 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     bannerZeigen("Level 10");
   }
 
+  if (nummer === 24) {
+    // Level 11 – so hat Arthur es erzählt: drei Wasserbecken, in der Mitte wohnt die böse Krake mit dem Piratenhut.
+    // Dazu eine Tintenkanone, die Tintenballons schießt.
+    maennchen.x = 450; maennchen.z = 520;
+    maennchen.hatSauger = false;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    krakeAufstellen();
+    kanoneAufstellen("links", 440, 0, TINTE_PAUSE, "tinte");
+    kanonen[0].wach = true; kanonen[0].schussUhr = 60;
+    zaehlerZeigen("Krake: " + KRAKE_PUNKTE + " Punkte");
+    tippZeigen("Die böse <b>Krake</b>! Sammle die <b>Tintenballons</b> von der Tintenkanone ein und bewirf sie damit. Pass auf die <b>rote Linie</b> auf!");
+    bannerZeigen("Level 11");
+    setTimeout(() => {
+      if (zimmer === 24 && krake) { lachTon(); sprechblase("Arrr! Ich bin die Piraten-Krake!", 450, 300, 175); }
+    }, 1200);
+  }
+
   bosseAmAnfang = bosse.length;
   if (nochmalVersuchen) {
     bannerZeigen("Nochmal!");
@@ -2301,6 +2672,8 @@ function zimmerMalen() {
   if (Z.lava) lavaMalen(Z);
   // Die Bewegungsfalle (Level 8)
   if (platte) platteMalen();
+  // Wasserbecken (Level 11)
+  if (becken.length) beckenMalen();
   // Ventilator und Knopf (Level 10)
   if (ventilator) ventilatorMalen();
   if (knopf) knopfMalen();
@@ -2620,7 +2993,7 @@ function kanoneMalen(k) {
   // das Mündungsfeuer
   if (k.rueckstoss > 6) {
     const lang = A.muendung * s;
-    malen.fillStyle = k.art === "netz" ? "rgba(244, 246, 255, 0.85)" : "rgba(255, 190, 80, 0.85)";
+    malen.fillStyle = k.art === "netz" ? "rgba(244, 246, 255, 0.85)" : k.art === "tinte" ? "rgba(70, 90, 220, 0.85)" : "rgba(255, 190, 80, 0.85)";
     malen.beginPath(); malen.arc(p.x + Math.cos(richtung) * lang, p.y + Math.sin(richtung) * lang, 22, 0, 6.28); malen.fill();
   }
   // Solange sie schläft, schnarcht sie
@@ -2901,6 +3274,8 @@ function allesMalen() {
   if (kiste) figuren.push({ z: kiste.z, malen: kisteMalen });
   for (const k of kanonen) figuren.push({ z: k.z, malen: () => kanoneMalen(k) });
   if (truhe) figuren.push({ z: truhe.z, malen: truheMalen });
+  if (krake) figuren.push({ z: becken[krake.becken].z, malen: krakeMalen });
+  for (const b of ballons) figuren.push({ z: b.z, malen: () => ballonMalen(b) });
   for (const d of dynamit) figuren.push({ z: d.z, malen: () => (d.art === "netz" ? netzMalen(d) : d.art === "feuer" ? feuerballMalen(d) : dynamitMalen(d)) });
   figuren.push({
     z: maennchen.z,
@@ -2919,6 +3294,7 @@ function allesMalen() {
   figuren.sort((a, b) => a.z - b.z);
   for (const f of figuren) f.malen();
 
+  zielMalen();
   // Die Saug-Luft
   const duese = duesenPunkt();
   const d = aufsBild(duese.x, duese.y, duese.z);
@@ -3093,7 +3469,7 @@ function spielSchleife() {
   if (!pause) geisterBewegen(); else saugtGerade = false;
   if (!wechselt && !pause) bosseBewegen();
   kisteBewegen();
-  if (!pause) { kanonenBewegen(); dynamitBewegen(); truheBewegen(); platteBewegen(); hauenBewegen(); knopfBewegen(); }
+  if (!pause) { kanonenBewegen(); dynamitBewegen(); truheBewegen(); platteBewegen(); hauenBewegen(); knopfBewegen(); krakeBewegen(); ballonsBewegen(); wurfBewegen(); }
   geldBewegen();
   effekteBewegen();
   saugTonAnpassen();
