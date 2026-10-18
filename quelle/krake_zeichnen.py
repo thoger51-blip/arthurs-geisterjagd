@@ -1,4 +1,4 @@
-"""Zeichnet Arthurs böse Krake mit Piratenhut (Level 11) als PNG.
+"""Zeichnet Arthurs Kraken als PNG: die kleine Piraten-Krake (Level 11) und die große Kapitäns-Krake (Level 12).
 Aufruf (im Ordner "quelle"):  python3 krake_zeichnen.py bilder"""
 from PIL import Image, ImageDraw
 import math, sys
@@ -62,6 +62,52 @@ def krake():
     oval(d, (266, 98, 278, 110), SCHWARZ, 0); oval(d, (283, 98, 295, 110), SCHWARZ, 0)
     return im.resize((W, H), Image.LANCZOS)
 
-im = krake()
-im.quantize(colors=96, method=Image.FASTOCTREE, dither=Image.NONE).save(ziel + "/krake.png", optimize=True)
+ROT = (206, 52, 66, 255); ROT_HELL = (238, 104, 112, 255)
+
+def grosse_krake():
+    """Die erwachsene Krake (Level 12): rot, mit spitzen Zähnen und Kapitänshut mit Feder."""
+    W, H = 600, 660
+    im = Image.new("RGBA", (W * K, H * K), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
+    for seite in (-1, 1):
+        for i, (dx, hoch) in enumerate([(120, 500), (175, 440)]):
+            pkt = []
+            for t in range(0, 31):
+                a = t / 30
+                x = 300 + seite * (70 + a * dx) + seite * math.sin(a * 5 + i) * 18
+                y = 640 - a * (640 - hoch) - math.sin(a * 3.1) * 40
+                pkt.append((x, y))
+            wurst(d, pkt, ROT, 46 - i * 6)
+            for t in range(4, 30, 6):
+                x, y = pkt[t]; oval(d, (x - 7, y + 4, x + 7, y + 16), (255, 210, 190, 255), 0)
+    oval(d, (110, 190, 490, 610), ROT)
+    oval(d, (160, 230, 300, 340), ROT_HELL, 0)
+    # zwei böse Augen
+    for ax in (235, 365):
+        oval(d, (ax - 42, 350, ax + 42, 440), WEISS, 5 * K)
+        oval(d, (ax - 16, 378, ax + 18, 424), SCHWARZ, 0)
+        oval(d, (ax - 9, 384, ax + 1, 396), WEISS, 0)
+    d.line([(185 * K, 335 * K), (280 * K, 362 * K)], fill=SCHWARZ, width=11 * K)
+    d.line([(415 * K, 335 * K), (320 * K, 362 * K)], fill=SCHWARZ, width=11 * K)
+    # großes Maul mit spitzen Zähnen (wie Arthur es gemalt hat)
+    oval(d, (200, 460, 400, 560), (90, 10, 20, 255))
+    for i in range(6):
+        x = 212 + i * 30
+        d.polygon([(x * K, 468 * K), ((x + 15) * K, 506 * K), ((x + 30) * K, 468 * K)], fill=WEISS)
+    for i in range(5):
+        x = 228 + i * 30
+        d.polygon([(x * K, 552 * K), ((x + 15) * K, 518 * K), ((x + 30) * K, 552 * K)], fill=WEISS)
+    # großer Kapitänshut mit Feder
+    vieleck(d, [(430, 128), (455, 50), (520, 5), (535, 40), (500, 100), (475, 140)], (230, 60, 80, 255), 5 * K)   # Feder
+    vieleck(d, [(40, 240), (120, 120), (300, 50), (480, 120), (560, 240), (300, 200)], SCHWARZ, 0)
+    vieleck(d, [(56, 234), (128, 130), (300, 64), (472, 130), (544, 234), (300, 190)], (40, 36, 48, 255), 0)
+    d.line([(56 * K, 234 * K), (300 * K, 190 * K), (544 * K, 234 * K)], fill=GOLD, width=10 * K, joint="curve")
+    d.line([(128 * K, 130 * K), (300 * K, 64 * K), (472 * K, 130 * K)], fill=GOLD, width=6 * K, joint="curve")
+    d.line([(262 * K, 92 * K), (338 * K, 160 * K)], fill=WEISS, width=10 * K)
+    d.line([(338 * K, 92 * K), (262 * K, 160 * K)], fill=WEISS, width=10 * K)
+    oval(d, (272, 84, 328, 134), WEISS, 0)
+    oval(d, (284, 101, 297, 114), SCHWARZ, 0); oval(d, (303, 101, 316, 114), SCHWARZ, 0)
+    return im.resize((W, H), Image.LANCZOS)
+
+for name, im in [("krake", krake()), ("krake_gross", grosse_krake())]:
+    im.quantize(colors=96, method=Image.FASTOCTREE, dither=Image.NONE).save(ziel + "/" + name + ".png", optimize=True)
 print("ok")

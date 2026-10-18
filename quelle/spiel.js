@@ -24,7 +24,8 @@
 //  Level 9:  Zimmer 22 – der Drache und der Pümpel
 //  Level 10: Zimmer 23 – Drache, zwei Kanonen, Ventilator und Zeitlupen-Knopf
 //  Level 11: Zimmer 24 – die böse Krake mit dem Piratenhut und die Tintenkanone
-//  Level 2 bis 11 hat Arthur selbst erfunden.
+//  Level 12: Zimmer 25 – die große Kapitäns-Krake mit 300 Punkten und Kugelkanonen
+//  Level 2 bis 12 hat Arthur selbst erfunden.
 // ================================================================
 
 // ---- 0. Stellschrauben -------------------------------------------
@@ -92,6 +93,7 @@ const BILDER = {
   dracheFeuer:  "__drache_feuer__",   // derselbe Drache mit offenem Maul
   puempel:      "__puempel__",        // der Pümpel
   krake:        "__krake__",          // die böse Krake mit dem Piratenhut (Level 11)
+  krakeGross:   "__krake_gross__",    // die erwachsene Kapitäns-Krake (Level 12)
 };
 
 // Hier laden wir alle Bilder. Erst wenn alle fertig sind, geht's los.
@@ -200,6 +202,9 @@ const ZIMMER = {
   // Level 11 – drei Wasserbecken, in der Mitte wohnt die Krake. 5 Herzen.
   24: { level: 11, hinten: "#1b3b5a", links: "#173350", rechts: "#132b44", streifen: "rgba(255,255,255,0.08)",
         herzen: true, herzenAnfang: 5, springen: true, tinte: true, geld: GELD_LEVEL_3 },
+  // Level 12 – wie Level 11, aber mit der großen Krake, zwei kleinen Becken an der Seite, Kerzen und Kugelkanonen
+  25: { level: 12, hinten: "#2a1f3d", links: "#241a35", rechts: "#1e162c", streifen: "rgba(255,211,77,0.10)",
+        herzen: true, herzenAnfang: 5, springen: true, tinte: true, kerzen: true, geld: GELD_LEVEL_3 },
   22: { level: 9, hinten: "#3b2418", links: "#331f15", rechts: "#2b1a11", streifen: "rgba(255,140,40,0.10)",
         herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
 };
@@ -601,6 +606,7 @@ let dynamit = [];
 //   rohr = so weit vorne kommt das Geschoss heraus · abstand = so weit steht sie von der Wand weg
 const KANONEN_ARTEN = {
   dynamit: { bild: "kanone",       massstab: 0.8, ankerX: 46.4,  ankerY: 79,   winkel0: 1.4407, muendung: 239, rohr: 175, abstand: 50,  schwenk: 0.72 },
+  kugel:   { bild: "kanone",       massstab: 0.8, ankerX: 46.4,  ankerY: 79,   winkel0: 1.4407, muendung: 239, rohr: 175, abstand: 50,  schwenk: 0.6 },
   tinte:   { bild: "kanone",       massstab: 0.8, ankerX: 46.4,  ankerY: 79,   winkel0: 1.4407, muendung: 239, rohr: 175, abstand: 50,  schwenk: 0.5 },
   netz:    { bild: "kanoneSpinne", massstab: 1.0, ankerX: 105.6, ankerY: 70.2, winkel0: 0,      muendung: 109, rohr: 115, abstand: 125, schwenk: 0.55 },
 };
@@ -653,7 +659,7 @@ function kanonenBewegen() {
       k.rueckstoss = 12;
       if (k.art === "netz") pflatschTon(); else bummTon();
       const richtX = Math.cos(k.winkel), richtZ = Math.sin(k.winkel);
-      const tempo = k.art === "netz" ? NETZ_TEMPO : (ZIMMER[zimmer].dynamitTempo || DYNAMIT_TEMPO);
+      const tempo = k.art === "netz" ? NETZ_TEMPO : k.art === "kugel" ? 1.8 : (ZIMMER[zimmer].dynamitTempo || DYNAMIT_TEMPO);
       dynamit.push({
         art: k.art,               // Dynamit oder Netz
         x: k.x + richtX * A.rohr, z: k.z + richtZ * A.rohr,
@@ -699,8 +705,8 @@ function dynamitBewegen() {
         maennchen.stossZ = ((maennchen.z - d.z) / weit) * 9;
         for (let i = 0; i < 16; i++) sternchen(d.x, 60, d.z, i % 2 ? "#ffb347" : "#ff5a5a");
         puffTon();
-        sprechblase(d.art === "feuer" ? "HEISS!" : "PENG!", d.x, 170, d.z);
-        herzVerlieren();
+        sprechblase(d.art === "feuer" ? "HEISS!" : d.art === "kugel" ? "BUMM!" : "PENG!", d.x, 170, d.z);
+        herzVerlieren(d.art === "kugel" ? 2 : 1);
       }
     }
     // An der Wand verpufft es einfach – ohne Loch im Boden
@@ -834,6 +840,15 @@ function hauenBewegen() {
   }
 }
 
+// Eine schwarze Kanonenkugel (Level 12)
+function kugelMalen(d) {
+  schattenMalen(d.x, d.z, 20, 0.3);
+  const p = aufsBild(d.x, 55, d.z), r = 19 * p.groesse;
+  malen.fillStyle = "#111014"; malen.beginPath(); malen.arc(p.x, p.y, r + 3, 0, 6.28); malen.fill();
+  malen.fillStyle = "#3d3a44"; malen.beginPath(); malen.arc(p.x, p.y, r, 0, 6.28); malen.fill();
+  malen.fillStyle = "rgba(255,255,255,0.5)"; malen.beginPath(); malen.arc(p.x - r * 0.35, p.y - r * 0.35, r * 0.3, 0, 6.28); malen.fill();
+}
+
 // Ein Feuerball vom Drachen
 function feuerballMalen(d) {
   schattenMalen(d.x, d.z, 22, 0.25);
@@ -954,10 +969,16 @@ let kleckse = [];           // Tintenflecken auf dem Boden
 let tinteModus = false;     // wirft man gerade Tintenballons (statt zu saugen)?
 const wurf = { zielt: false, kraft: 0, hinweis: 0 };
 
-function krakeAufstellen() {
-  becken = [{ x: 210, z: 205, rx: 105, rz: 62 }, { x: 450, z: 175, rx: 105, rz: 62 }, { x: 690, z: 205, rx: 105, rz: 62 }];
-  krake = { becken: 1, hoch: 0, zustand: "auftauchen", uhr: 0, ersteMal: true, punkte: KRAKE_PUNKTE, angriffUhr: 160,
-            richtX: 0, richtZ: 1, laenge: 0, getroffen: 0, besiegt: false };
+// gross = true: die erwachsene Krake aus Level 12 (größer, 300 Punkte, großes Becken in der Mitte)
+function krakeAufstellen(gross) {
+  becken = gross
+    ? [{ x: 170, z: 235, rx: 80, rz: 50 }, { x: 450, z: 175, rx: 150, rz: 78 }, { x: 730, z: 235, rx: 80, rz: 50 }]
+    : [{ x: 210, z: 205, rx: 105, rz: 62 }, { x: 450, z: 175, rx: 105, rz: 62 }, { x: 690, z: 205, rx: 105, rz: 62 }];
+  krake = { becken: 1, hoch: 0, zustand: "auftauchen", uhr: 0, ersteMal: true, angriffUhr: 160,
+            richtX: 0, richtZ: 1, laenge: 0, getroffen: 0, besiegt: false,
+            punkteMax: gross ? 300 : KRAKE_PUNKTE, treffer: gross ? 10 : TREFFER_PUNKTE,
+            bild: gross ? bild.krakeGross : bild.krake, groesse: gross ? 380 : 310 };
+  krake.punkte = krake.punkteMax;
   tinteModus = true;
 }
 
@@ -1054,7 +1075,7 @@ function krakeIstWeg() {
 
 function krakeGetroffen() {
   const K = krake, B = becken[K.becken];
-  K.punkte = Math.max(0, K.punkte - TREFFER_PUNKTE);
+  K.punkte = Math.max(0, K.punkte - K.treffer);
   K.getroffen = 30;
   K.laenge = 0;
   for (let i = 0; i < 24; i++) sternchen(B.x + zufall(-50, 50), zufall(80, 220), B.z, i % 2 ? "#2b2f8f" : "#11124a");
@@ -1199,7 +1220,7 @@ function krakeMalen() {
   }
   if (K.hoch <= 0) return;
   // Die Krake – nur der Teil über dem Wasser ist zu sehen
-  const b = bild.krake, h = 310 * p.groesse, w = h * b.width / b.height;
+  const b = K.bild, h = K.groesse * p.groesse, w = h * b.width / b.height;
   const unten = p.y + h * 0.18 + (1 - K.hoch) * h * 1.05 + Math.sin(zeit * 0.06) * 4;
   malen.save();
   malen.beginPath(); malen.rect(0, 0, 960, p.y + 4); malen.clip();
@@ -1216,7 +1237,7 @@ function krakeMalen() {
     const q = aufsBild(B.x, 0, B.z + B.rz + 34), breite = 150, hoehe = 16;
     malen.fillStyle = "#111014"; malen.beginPath(); malen.roundRect(q.x - breite / 2 - 4, q.y - 4, breite + 8, hoehe + 8, 10); malen.fill();
     malen.fillStyle = "#3a2a3a"; malen.beginPath(); malen.roundRect(q.x - breite / 2, q.y, breite, hoehe, 7); malen.fill();
-    malen.fillStyle = "#c86bd6"; malen.beginPath(); malen.roundRect(q.x - breite / 2, q.y, Math.max(8, breite * K.punkte / KRAKE_PUNKTE), hoehe, 7); malen.fill();
+    malen.fillStyle = "#c86bd6"; malen.beginPath(); malen.roundRect(q.x - breite / 2, q.y, Math.max(8, breite * K.punkte / K.punkteMax), hoehe, 7); malen.fill();
     malen.fillStyle = "#fff4fa"; malen.font = "800 15px 'Baloo 2', sans-serif"; malen.textAlign = "center";
     malen.fillText(K.punkte + " Punkte", q.x, q.y + 13);
   }
@@ -1665,11 +1686,11 @@ function maennchenBewegen() {
 }
 
 // Ein Kronen-Geist hat das Männchen erwischt!
-function herzVerlieren() {
+function herzVerlieren(anzahl) {
   treffBlitz = 14;
   try { if (navigator.vibrate) navigator.vibrate(80); } catch (e) { /* manche Geräte können nicht vibrieren */ }
   if (herzen > 0) {
-    herzen = herzen - 1;              // ein Herz ist weg
+    herzen = Math.max(0, herzen - (anzahl || 1));   // ein Herz ist weg (eine Kanonenkugel nimmt zwei)
     unverwundbar = SCHONZEIT;         // jetzt blinkt das Männchen und ist kurz sicher
     herzHuepfer = 24;
     autschTon();
@@ -1802,7 +1823,7 @@ function eingesaugt(g) {
   gefangen = gefangen + 1;
   schluerfTon();
   for (let i = 0; i < 10; i++) sternchen(g.x, 50, g.z, "#6fd3ff");
-  if (zimmer === 24 && geister.filter((x) => !x.weg).length === 0) {
+  if ((zimmer === 24 || zimmer === 25) && geister.filter((x) => !x.weg).length === 0) {
     setTimeout(siegesMelodie, 300);
     geldRegen(450, 330);
   }
@@ -2483,10 +2504,9 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     sauger.x = 170; sauger.z = 470;
     ventilator = { x: 400, z: 300, an: false };
     knopf = { x: 560, z: 330, pause: 0 };
-    kanoneAufstellen("links", 330, 0, 320);          // jede Kanone schießt nur alle gut 5 Sekunden …
-    kanoneAufstellen("rechts", 330, 160, 320);       // … und immer abwechselnd
+    kanoneAufstellen("rechts", 330, 0, 320);         // nur noch eine Kanone (Arthurs Wunsch) – alle gut 5 Sekunden
     bosse = [bossMachen({
-      name: "Drache", drache: true, x: 600, z: 150, groesse: 300, kraftMax: 240, leben: 2, schwebt: 0, zMin: 120, tiefFaktor: 0.7,
+      name: "Drache", drache: true, x: 600, z: 150, groesse: 300, kraftMax: 240, leben: 1, schwebt: 0, zMin: 120, tiefFaktor: 0.7,
       radius: 95, jagt: 0.45, jagdPhasen: true, dx: 0.6, dz: 0.4, stoss: 16, ruf: "ROAAR!",
       balkenOben: true, wirdZuGeld: true, feuerPause: 240, feuerTempo: 2.2,
     })];
@@ -2497,6 +2517,28 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     bannerZeigen("Level 10");
   }
 
+  if (nummer === 25) {
+    // Level 12 – so hat Arthur es gemalt: in der Mitte das große Becken mit der erwachsenen Krake,
+    // links und rechts zwei kleine Becken, unten zwei Kerzen. Kugelkanonen schießen auf das Männchen
+    // (die tun der Krake nichts, aber eine Kugel kostet zwei Herzen!). Rechts die Tintenkanone.
+    maennchen.x = 450; maennchen.z = 520;
+    maennchen.hatSauger = false;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    krakeAufstellen(true);
+    kanoneAufstellen("rechts", 460, 0, 130, "tinte");
+    kanoneAufstellen("links", 330, 120, 380, "kugel");
+    kanoneAufstellen("rechts", 300, 300, 380, "kugel");
+    for (const k of kanonen) k.wach = true;
+    kanonen[0].schussUhr = 40;
+    zaehlerZeigen("Krake: 300 Punkte");
+    tippZeigen("Die <b>große Krake</b> ist da – 300 Punkte! Vorsicht vor den <b>Kanonenkugeln</b>: Die kosten zwei Herzen. Drüberspringen hilft!");
+    bannerZeigen("Level 12");
+    setTimeout(() => {
+      if (zimmer === 25 && krake) { lachTon(); sprechblase("Du hast mein Kind geärgert! Arrr!", 450, 330, 175); }
+    }, 1200);
+  }
+
   if (nummer === 24) {
     // Level 11 – so hat Arthur es erzählt: drei Wasserbecken, in der Mitte wohnt die böse Krake mit dem Piratenhut.
     // Dazu eine Tintenkanone, die Tintenballons schießt.
@@ -2504,7 +2546,7 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     maennchen.hatSauger = false;
     maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
     sauger.versteckt = true;
-    krakeAufstellen();
+    krakeAufstellen(false);
     kanoneAufstellen("links", 440, 0, TINTE_PAUSE, "tinte");
     kanonen[0].wach = true; kanonen[0].schussUhr = 60;
     zaehlerZeigen("Krake: " + KRAKE_PUNKTE + " Punkte");
@@ -3276,7 +3318,7 @@ function allesMalen() {
   if (truhe) figuren.push({ z: truhe.z, malen: truheMalen });
   if (krake) figuren.push({ z: becken[krake.becken].z, malen: krakeMalen });
   for (const b of ballons) figuren.push({ z: b.z, malen: () => ballonMalen(b) });
-  for (const d of dynamit) figuren.push({ z: d.z, malen: () => (d.art === "netz" ? netzMalen(d) : d.art === "feuer" ? feuerballMalen(d) : dynamitMalen(d)) });
+  for (const d of dynamit) figuren.push({ z: d.z, malen: () => (d.art === "netz" ? netzMalen(d) : d.art === "feuer" ? feuerballMalen(d) : d.art === "kugel" ? kugelMalen(d) : dynamitMalen(d)) });
   figuren.push({
     z: maennchen.z,
     malen: () => {
