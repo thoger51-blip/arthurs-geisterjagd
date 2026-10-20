@@ -25,9 +25,9 @@
 //  Level 10: Zimmer 23 – Drache, zwei Kanonen, Ventilator und Zeitlupen-Knopf
 //  Level 11: Zimmer 24 – die böse Krake mit dem Piratenhut und die Tintenkanone
 //  Level 12: Zimmer 25 – die große Kapitäns-Krake mit 300 Punkten und Kugelkanonen
-//  Level 13: Zimmer 26 – die Krake mit dem Tentakel-Schild
+//  Level 13: Zimmer 26 – die Krake, die sich (noch) nicht wehrt
 //            Zimmer 27 – die kaputte Brücke über dem Wasser
-//            Zimmer 28 – der Kürbis, auf den man dreimal springen muss
+//            Zimmer 28 – der Kürbis mit der Krake drin: dreimal draufspringen, Tentakel-Schild und Tentakel-Angriffe
 //  Level 2 bis 13 hat Arthur selbst erfunden.
 // ================================================================
 
@@ -1014,7 +1014,7 @@ function krakeBewegen() {
     K.hoch = Math.min(1, K.hoch + 0.03);
     if (K.hoch >= 1) { K.zustand = "oben"; K.angriffUhr = K.ersteMal ? 150 : 100; K.ersteMal = false; }
   } else if (K.zustand === "oben") {
-    K.angriffUhr = K.angriffUhr - 1;
+    if (!K.passiv) K.angriffUhr = K.angriffUhr - 1;      // Level 13, erster Raum: Sie wehrt sich (noch) nicht
     if (K.angriffUhr <= 0) {
       // Sie zielt auf das Männchen – eine rote Linie zeigt, wo der Tentakel gleich hinschlägt
       const zuX = maennchen.x - B.x, zuZ = maennchen.z - B.z, weit = Math.hypot(zuX, zuZ) || 1;
@@ -1329,9 +1329,22 @@ function kuerbisBewegen() {
   if (maennchen.hoehe === 0) maennchen.nachStampf = false;    // erst wieder landen, dann zählt der nächste Sprung
   for (const k of bosse) {
     if (!k.kuerbis || k.besiegt) continue;
+    kuerbisTentakel(k);
     if (k.getroffen > 0) k.getroffen = k.getroffen - 1;
     if (k.stampfPause > 0) { k.stampfPause = k.stampfPause - 1; continue; }
     const weit = Math.hypot(maennchen.x - k.x, (maennchen.z - k.z) * 1.3);
+    if (maennchen.hoehe > 15 && weit < k.radius + 45 && !maennchen.nachStampf && k.schild) {
+      // Die Krake hat ihre Tentakel hochgefahren: Der Sprung macht nur die Tentakel weg
+      k.schild = false;
+      k.stampfPause = 40;
+      maennchen.sprungTempo = 9;
+      maennchen.nachStampf = true;
+      pflatschTon();
+      for (let i = 0; i < 14; i++) sternchen(k.x + zufall(-50, 50), zufall(120, 220), k.z, "#c86bd6");
+      sprechblase("Tentakel weg!", k.x, 260, k.z);
+      tippZeigen("Die <b>Tentakel</b> sind weg – jetzt nochmal draufspringen!");
+      continue;
+    }
     if (maennchen.hoehe > 15 && weit < k.radius + 45 && !maennchen.nachStampf) {   // großzügig: Hauptsache, man springt über ihm
       // Draufgesprungen! Er wird platt gedrückt und das Männchen hüpft wieder hoch.
       k.kraft = k.kraft - 1;
@@ -1352,8 +1365,93 @@ function kuerbisBewegen() {
         sprechblase("KNACKS!", k.x, 220, k.z);
       } else {
         k.jagt = k.jagt + 0.25;       // er wird wütend und schneller
+        k.schild = true;              // die Krake im Kürbis fährt ihre Tentakel hoch
         sprechblase(k.kraft === 2 ? "AUA!" : "Nur noch einmal!", k.x, 220, k.z);
-        tippZeigen("Super! Noch <b>" + k.kraft + "-mal</b> draufspringen!");
+        tippZeigen("Treffer! Jetzt hat die Krake ihre <b>Tentakel</b> hochgefahren – spring drauf, dann sind sie weg. Noch <b>" + k.kraft + "-mal</b> treffen!");
+      }
+    }
+  }
+}
+
+// Die Krake im Kürbis wehrt sich: Sie schlägt mit einem Tentakel zu – vorher zeigt eine rote Linie, wohin.
+function kuerbisTentakel(k) {
+  const A = k.angriff;
+  if (wechselt || geschafft || k.liegt > 0) return;
+  if (A.zustand === "warten") {
+    A.uhr = A.uhr - 1;
+    if (A.uhr <= 0) {
+      const zuX = maennchen.x - k.x, zuZ = maennchen.z - k.z, weit = Math.hypot(zuX, zuZ) || 1;
+      A.rx = zuX / weit; A.rz = zuZ / weit;
+      A.ox = k.x; A.oz = k.z;
+      A.zustand = "zielt"; A.uhr = TENTAKEL_WARNEN;
+      warnTon();
+    }
+  } else if (A.zustand === "zielt") {
+    A.uhr = A.uhr - 1;
+    if (A.uhr <= 0) { A.zustand = "schlaegt"; A.uhr = 0; peitschTon(); }
+  } else if (A.zustand === "schlaegt") {
+    A.uhr = A.uhr + 1;
+    A.laenge = A.uhr < 10 ? A.uhr / 10 : A.uhr < 34 ? 1 : Math.max(0, 1 - (A.uhr - 34) / 14);
+    if (A.laenge > 0.2 && unverwundbar === 0 && maennchen.hoehe < 40) {
+      const vx = maennchen.x - A.ox, vz = maennchen.z - A.oz;
+      const entlang = vx * A.rx + vz * A.rz, quer = vx * -A.rz + vz * A.rx;
+      if (entlang > 40 && entlang < 520 * A.laenge && Math.abs(quer) < 36) {
+        const seite = quer < 0 ? -1 : 1;
+        maennchen.stossX = -A.rz * seite * 12; maennchen.stossZ = A.rx * seite * 12;
+        sprechblase("KLATSCH!", maennchen.x, 200, maennchen.z);
+        herzVerlieren();
+      }
+    }
+    if (A.uhr >= 48) { A.zustand = "warten"; A.laenge = 0; A.uhr = 230 + Math.floor(zufall(-30, 30)); }
+  }
+}
+
+// Die rote Warn-Linie am Boden (vor allen Figuren gemalt)
+function kuerbisWarnungMalen() {
+  for (const k of bosse) {
+    if (!k.kuerbis || !k.angriff || k.angriff.zustand !== "zielt") continue;
+    const A = k.angriff;
+    malen.globalAlpha = zeit % 10 < 5 ? 0.95 : 0.55;
+    for (let i = 1; i < 13; i++) {
+      const a = 40 + i * 40;
+      linie([A.ox + A.rx * a, 2, A.oz + A.rz * a], [A.ox + A.rx * (a + 24), 2, A.oz + A.rz * (a + 24)], "#ff2a3c", 14);
+    }
+    malen.globalAlpha = 1;
+  }
+}
+
+// Der zuschlagende Tentakel (als Figur, damit er richtig vor oder hinter dem Männchen liegt)
+function kuerbisTentakelMalen(k) {
+  const A = k.angriff;
+  if (A.zustand !== "schlaegt" || A.laenge <= 0) return;
+  const p = aufsBild(A.ox, 0, A.oz), lang = 520 * A.laenge, punkte = [];
+  for (let i = 0; i <= 22; i++) {
+    const a = 30 + (lang - 30) * i / 22, welle = Math.sin(i * 0.9 + zeit * 0.4) * 10;
+    punkte.push(aufsBild(A.ox + A.rx * a - A.rz * welle, 22, A.oz + A.rz * a + A.rx * welle));
+  }
+  for (const [farbe, breite] of [["#111014", 30], ["#9c40aa", 20]]) {
+    malen.strokeStyle = farbe; malen.lineCap = "round"; malen.lineJoin = "round"; malen.lineWidth = breite * p.groesse;
+    malen.beginPath(); punkte.forEach((q, i) => (i ? malen.lineTo(q.x, q.y) : malen.moveTo(q.x, q.y))); malen.stroke();
+  }
+  malen.fillStyle = "#ffaac8";
+  for (let i = 2; i < punkte.length; i += 3) { malen.beginPath(); malen.arc(punkte[i].x, punkte[i].y + 3, 4, 0, 6.28); malen.fill(); }
+}
+
+// Die Krake, die oben aus dem Kürbis schaut – mit hochgefahrenen Tentakeln, wenn sie sich schützt
+function kuerbisKrakeMalen(k, x, y, h) {
+  const b = bild.krake, kh = h * 0.9, kw = kh * b.width / b.height;
+  const wackeln = Math.sin(zeit * 0.08) * 3;
+  malen.drawImage(b, x - kw / 2, y - h * 0.68 - kh + wackeln, kw, kh);
+  if (k.schild) {
+    for (const seite of [-1, 1]) {
+      const pkt = [];
+      for (let i = 0; i <= 12; i++) {
+        const t = i / 12;
+        pkt.push({ x: x + seite * (h * 0.38 - t * h * 0.5) + Math.sin(t * 4 + zeit * 0.1) * 5, y: y - h * 0.75 - t * h * 0.8 });
+      }
+      for (const [farbe, breite] of [["#111014", 30], ["#9c40aa", 20]]) {
+        malen.strokeStyle = farbe; malen.lineWidth = breite * h / 200; malen.lineCap = "round"; malen.lineJoin = "round";
+        malen.beginPath(); pkt.forEach((q, i) => (i ? malen.lineTo(q.x, q.y) : malen.moveTo(q.x, q.y))); malen.stroke();
       }
     }
   }
@@ -2612,19 +2710,18 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
 
   if (nummer === 26) {
     // Level 13, erster Raum – so hat Arthur es gemalt: in der Mitte ein großes Becken mit der Krake,
-    // oben links und rechts zwei kleine Becken, hinten die Tür. Wenn man die Krake trifft,
-    // fährt sie ihre Tentakel hoch – die muss man erst mit einem Ballon wegmachen.
+    // oben links und rechts zwei kleine Becken, hinten die Tür. Hier wehrt sich die Krake noch nicht.
     maennchen.x = 450; maennchen.z = 530;
     maennchen.hatSauger = false;
     maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
     sauger.versteckt = true;
     krakeAufstellen(true);
     becken = [{ x: 170, z: 150, rx: 75, rz: 45 }, { x: 450, z: 300, rx: 130, rz: 70 }, { x: 730, z: 150, rx: 75, rz: 45 }];
-    krake.punkteMax = 100; krake.punkte = 100; krake.treffer = 20; krake.groesse = 330; krake.mitSchild = true;
+    krake.punkteMax = 100; krake.punkte = 100; krake.treffer = 20; krake.groesse = 330; krake.passiv = true;
     kanoneAufstellen("rechts", 460, 0, 150, "tinte");
     kanonen[0].wach = true; kanonen[0].schussUhr = 40;
     zaehlerZeigen("Krake: 100 Punkte");
-    tippZeigen("Die <b>Krake</b>! Bewirf sie mit Tintenballons. Fährt sie die <b>Tentakel</b> hoch, musst du die erst wegwerfen!");
+    tippZeigen("Die <b>Krake</b>! Hier wehrt sie sich noch nicht – bewirf sie mit <b>Tintenballons</b>!");
     bannerZeigen("Level 13");
   }
 
@@ -2641,7 +2738,9 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
   }
 
   if (nummer === 28) {
-    // Level 13, letzter Raum: der böse Kürbis. Dreimal draufspringen, dann ist er kaputt!
+    // Level 13, letzter Raum: der böse Kürbis – und unten drin sitzt die Krake! Dreimal draufspringen, dann ist er kaputt.
+    // Hier wehrt sich die Krake: Sie schlägt mit Tentakeln zu, und nach jedem Treffer fährt sie ihre Tentakel hoch –
+    // die muss man erst mit einem Sprung wegmachen.
     maennchen.x = 450; maennchen.z = 520;
     maennchen.hatSauger = false;
     maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
@@ -2651,12 +2750,13 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
       radius: 70, jagt: 0.9, jagdPhasen: true, dx: 0.9, dz: 0.6, stoss: 14, ruf: "RUMMS!",
       balkenOben: true, wirdZuGeld: true,
     })];
-    bosse[0].getroffen = 0; bosse[0].stampfPause = 0; bosse[0].schubsPause = 150;
+    bosse[0].getroffen = 0; bosse[0].stampfPause = 0; bosse[0].schubsPause = 150; bosse[0].schild = false;
+    bosse[0].angriff = { zustand: "warten", uhr: 240, rx: 0, rz: 1, ox: 0, oz: 0, laenge: 0 };
     zaehlerZeigen("Der Kürbis!");
-    tippZeigen("Der böse <b>Kürbis</b>! Spring <b>dreimal</b> auf ihn drauf – " + springTipp + "!");
+    tippZeigen("Der böse <b>Kürbis</b> – und die <b>Krake</b> sitzt drin! Spring <b>dreimal</b> auf ihn drauf – " + springTipp + ". Pass auf die <b>rote Linie</b> auf!");
     bannerZeigen("Der Kürbis!");
     setTimeout(() => {
-      if (zimmer === 28 && bosse[0]) { lachTon(); sprechblase("Hihihi! Mich kriegst du nicht platt!", bosse[0].x, 280, bosse[0].z); }
+      if (zimmer === 28 && bosse[0]) { lachTon(); sprechblase("Arrr! Jetzt wehre ich mich!", bosse[0].x, 300, bosse[0].z); }
     }, 900);
   }
 
@@ -3161,6 +3261,7 @@ function bossMalen(k) {
     k.platt = true;
   }
   if (k.getroffen > 0 && zeit % 4 < 2) malen.filter = "brightness(2.2)";                                  // PLOPP – er blitzt weiß
+  if (k.kuerbis && kipp === 0 && !k.besiegt) kuerbisKrakeMalen(k, p.x, p.y, groesse * p.groesse);
   if (kipp > 0) {
     malen.save();
     malen.translate(p.x, p.y);
@@ -3461,6 +3562,7 @@ function bannerMalen() {
 // ---- 19. Alles zusammen malen --------------------------------------
 function allesMalen() {
   zimmerMalen();
+  kuerbisWarnungMalen();
   // Der große Kraft-Balken hängt hinten an der Wand – die Krone vom Riesengeist ragt manchmal darüber
   for (const k of bosse) if (k.balkenOben) kraftBalkenObenMalen(k);
 
@@ -3487,6 +3589,7 @@ function allesMalen() {
   for (const k of kanonen) figuren.push({ z: k.z, malen: () => kanoneMalen(k) });
   if (truhe) figuren.push({ z: truhe.z, malen: truheMalen });
   if (krake) figuren.push({ z: becken[krake.becken].z, malen: krakeMalen });
+  for (const k of bosse) if (k.kuerbis && k.angriff) figuren.push({ z: k.angriff.oz + 1, malen: () => kuerbisTentakelMalen(k) });
   for (const b of ballons) figuren.push({ z: b.z, malen: () => ballonMalen(b) });
   for (const d of dynamit) figuren.push({ z: d.z, malen: () => (d.art === "netz" ? netzMalen(d) : d.art === "feuer" ? feuerballMalen(d) : d.art === "kugel" ? kugelMalen(d) : dynamitMalen(d)) });
   figuren.push({
