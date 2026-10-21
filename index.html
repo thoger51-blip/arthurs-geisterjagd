@@ -624,7 +624,10 @@ function geldRegen(x, z) {
   } while (summe(werte) > regel.hoechstens || summe(werte) < 6 || !werte.some((w) => w >= 5));
 
   // Jedes Stück fliegt an einen anderen Platz im Zimmer
-  const plaetze = mischen([[170, 170], [450, 130], [730, 170], [240, 410], [660, 410], [450, 330]]);
+  // (nicht in ein Wasserbecken und nicht hinter das Laufband – da käme man nicht hin)
+  const plaetze = mischen([[170, 170], [450, 130], [730, 170], [240, 410], [660, 410], [450, 330],
+                           [150, 480], [750, 480], [300, 300], [600, 300]]
+    .filter(([px, pz]) => !(becken.length && imBecken(px, pz, 45)) && !(ZIMMER[zimmer].band && pz < 220)));
   geld = werte.map((wert, i) => ({
     wert,
     x, z, y: 120,
