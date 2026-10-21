@@ -28,7 +28,10 @@
 //  Level 13: Zimmer 26 – die Krake, die sich (noch) nicht wehrt
 //            Zimmer 27 – die kaputte Brücke über dem Wasser
 //            Zimmer 28 – der Kürbis mit der Krake drin: dreimal draufspringen, Tentakel-Schild und Tentakel-Angriffe
-//  Level 2 bis 13 hat Arthur selbst erfunden.
+//  Level 14: Zimmer 29 – der Kürbis zum Draufspringen
+//            Zimmer 30 – das Skelett und das Figuren-Rätsel
+//            Zimmer 31 – Kabumm auf dem Laufband (Bomben werfen!)
+//  Level 2 bis 14 hat Arthur selbst erfunden.
 // ================================================================
 
 // ---- 0. Stellschrauben -------------------------------------------
@@ -72,7 +75,11 @@ const TREFFER_PUNKTE = 20;      // so viele Punkte kostet sie ein Tintenballon (
 const TENTAKEL_WARNEN = 75;     // so lange sieht man die rote Linie, bevor der Tentakel zuschlägt (75 = 1,25 Sekunden)
 const TENTAKEL_PAUSE = 190;     // so lange wartet sie zwischen zwei Tentakel-Angriffen
 const TINTE_PAUSE = 180;        // so oft schießt die Tintenkanone einen Ballon
-const WURF_WEITE = 440;         // so weit fliegt ein Tintenballon höchstens     // so langsam fliegt dann alles (0.4 = weniger als halb so schnell)
+const WURF_WEITE = 440;         // so weit fliegt ein Tintenballon höchstens
+// Level 14
+const RAETSEL_ZEIT = 1200;      // so lange hat man für das Figuren-Rätsel Zeit (1200 = 20 Sekunden)
+const BAND_TEMPO = 1.3;         // so schnell fährt das Laufband auf einen zu (das Männchen läuft mit 3.6)
+const BOMBE_SCHADEN = 5;        // so viele Punkte nimmt eine Bombe Kabumm weg (er hat 100)     // so langsam fliegt dann alles (0.4 = weniger als halb so schnell)
 
 // ---- 1. Unsere Bilder --------------------------------------------
 const BILDER = {
@@ -98,6 +105,8 @@ const BILDER = {
   krake:        "__krake__",          // die böse Krake mit dem Piratenhut (Level 11)
   krakeGross:   "__krake_gross__",    // die erwachsene Kapitäns-Krake (Level 12)
   kuerbis:      "__kuerbis__",        // der böse Kürbis (Level 13)
+  skelett:      "__skelett__",        // das Skelett (Level 14)
+  kabumm:       "__kabumm__",         // Kabumm, die lebendige Bombe (Level 14)
 };
 
 // Hier laden wir alle Bilder. Erst wenn alle fertig sind, geht's los.
@@ -219,6 +228,15 @@ const ZIMMER = {
         weg: [[330, 500, 450, 560], [330, 360, 450, 430], [330, 220, 450, 290], [330, 80, 450, 150], [330, -120, 450, 10]] },
   28: { level: 13, hinten: "#3a2416", links: "#311e12", rechts: "#28180e", streifen: "rgba(255,160,40,0.12)",
         herzen: true, herzenAnfang: 5, springen: true, kerzen: true, ohneSaugen: true, geld: GELD_LEVEL_3 },
+  // Level 14
+  29: { level: 14, hinten: "#3a2416", links: "#311e12", rechts: "#28180e", streifen: "rgba(255,160,40,0.12)",
+        tuerHinten: { von: 400, bis: 520 }, herzen: true, herzenAnfang: 5, springen: true, ohneSaugen: true },
+  30: { level: 14, hinten: "#2b2b33", links: "#24242b", rechts: "#1e1e24", streifen: "rgba(255,255,255,0.07)",
+        tuerHinten: { von: 400, bis: 520 }, herzen: true, herzenAnfang: 5, springen: true, geisterBeissen: true },
+  // Das Laufband fährt auf einen zu – vorne ist Wasser. Hinten auf seiner Insel steht Kabumm.
+  31: { level: 14, hinten: "#1d2f4a", links: "#192840", rechts: "#152236", streifen: "rgba(255,255,255,0.07)",
+        herzen: true, herzenAnfang: 5, springen: true, tinte: true, band: true, lava: true, wasser: true,
+        start: [450, 330], weg: [[30, 175, 870, 492]], kerzen: true, geld: GELD_LEVEL_3 },
   22: { level: 9, hinten: "#3b2418", links: "#331f15", rechts: "#2b1a11", streifen: "rgba(255,140,40,0.10)",
         herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
 };
@@ -374,7 +392,7 @@ function bossMachen(was) {
 }
 
 // Je weniger Kraft ein Kronen-Geist hat, desto kleiner wird er
-function bossGroesse(k) { return k.drache || k.kuerbis ? k.groesse : k.groesse * (0.7 + 0.3 * k.kraft / k.kraftMax); }
+function bossGroesse(k) { return k.drache || k.kuerbis || k.skelett || k.bandBoss ? k.groesse : k.groesse * (0.7 + 0.3 * k.kraft / k.kraftMax); }
 
 // ---- 8. Das Geld und die Rechen-Aufgabe ----------------------------
 let geld = [];            // die Münzen und Scheine, die im Zimmer liegen
@@ -452,6 +470,11 @@ function antwortGeben(nummer) {
   // Die Aufgabe vom Kistenteufel
   if (rechnung.art === "teufel") {
     if (richtig) teufelBesiegt(); else teufelLacht();
+    return;
+  }
+  // Das Figuren-Rätsel vom Skelett
+  if (rechnung.art === "raetsel") {
+    if (richtig) raetselGeloest(); else { knopf.classList.add("falsch"); raetselVerloren("Falsch!"); }
     return;
   }
 
@@ -583,7 +606,7 @@ function teufelBesiegt() {
 
 // Solange der Kistenteufel fragt, steht die Zeit still – so kann man in Ruhe rechnen.
 // Auch während man ein Level aussucht, wartet alles.
-function zeitSteht() { return levelWahlOffen || (rechnung !== null && rechnung.art === "teufel"); }
+function zeitSteht() { return levelWahlOffen || (rechnung !== null && (rechnung.art === "teufel" || rechnung.art === "raetsel")); }
 
 function kisteBewegen() {
   if (!kiste) return;
@@ -1132,11 +1155,15 @@ function ballonsBewegen() {
   for (const b of ballons) {
     if (b.liegt) {
       b.wippen = b.wippen + 0.08;
+      if (ZIMMER[zimmer].band) {           // Bomben fahren auf dem Laufband mit – vorne fallen sie ins Wasser
+        b.z = b.z + BAND_TEMPO;
+        if (b.z > 492) { b.weg = true; pflatschTon(); for (let i = 0; i < 8; i++) blase({ x: b.x, z: b.z }); continue; }
+      }
       // Einsammeln: einfach hinlaufen
       if (maennchen.tinte < 3 && Math.hypot(maennchen.x - b.x, maennchen.z - b.z) < 55) {
         b.weg = true; maennchen.tinte = maennchen.tinte + 1;
         aufhebTon();
-        zaehlerZeigen("Tintenballons: " + maennchen.tinte);
+        zaehlerZeigen((b.bombe ? "Bomben: " : "Tintenballons: ") + maennchen.tinte);
         if (maennchen.tinte === 1 && wurf.hinweis < 1) {
           wurf.hinweis = 1;
           tippZeigen(istTouch ? "Halte <b>WERFEN</b> gedrückt zum Zielen – loslassen, und der Ballon fliegt!"
@@ -1154,6 +1181,15 @@ function ballonsBewegen() {
       if (b.vonKanone) { b.liegt = true; b.hoehe = 0; continue; }
       // Ein geworfener Ballon landet: Trifft er die Krake?
       b.weg = true;
+      // Level 14: Eine geworfene Bombe – trifft sie Kabumm?
+      if (b.bombe) {
+        const k = bosse.find((x) => x.bandBoss && !x.besiegt);
+        if (k && Math.abs(b.x - k.x) < 90 && Math.abs(b.z - k.z) < 75) { kabummGetroffen(k); continue; }
+        bummTon();
+        for (let i = 0; i < 14; i++) sternchen(b.x + zufall(-30, 30), zufall(10, 80), b.z, i % 2 ? "#ffb347" : "#9aa3ad");
+        sprechblase("Daneben!", b.x, 120, b.z);
+        continue;
+      }
       const K = krake;
       if (K && !K.besiegt && K.hoch > 0.4 && K.zustand !== "taucht") {
         const B = becken[K.becken];
@@ -1183,16 +1219,17 @@ function wurfBewegen() {
     if (maennchen.tinte > 0) {
       wurf.zielt = true;
       wurf.kraft = Math.min(1, wurf.kraft + 1 / 55);
-    } else if (wurf.hinweis < 2 && krake) {
+    } else if (wurf.hinweis < 2 && (krake || ZIMMER[zimmer].band)) {
       wurf.hinweis = 2;
-      tippZeigen("Du hast noch keinen <b>Tintenballon</b>. Die Tintenkanone schießt welche – sammle sie ein!");
+      tippZeigen(ZIMMER[zimmer].band ? "Du hast noch keine <b>Bombe</b>. Kabumm wirft welche aufs Laufband – sammle sie ein!"
+                                     : "Du hast noch keinen <b>Tintenballon</b>. Die Tintenkanone schießt welche – sammle sie ein!");
     }
   } else if (wurf.zielt) {
     const z = wurfZiel();
     ballons.push({ x: maennchen.x, z: maennchen.z, startX: maennchen.x, startZ: maennchen.z, zielX: z.x, zielZ: z.z,
-                   flug: 0, hoehe: 60, vonKanone: false, liegt: false, wippen: 0 });
+                   flug: 0, hoehe: 60, vonKanone: false, liegt: false, wippen: 0, bombe: !!ZIMMER[zimmer].band });
     maennchen.tinte = maennchen.tinte - 1;
-    zaehlerZeigen("Tintenballons: " + maennchen.tinte);
+    zaehlerZeigen((ZIMMER[zimmer].band ? "Bomben: " : "Tintenballons: ") + maennchen.tinte);
     piep(400, 700, 0.15, "triangle", 0, 0.2);
     wurf.zielt = false; wurf.kraft = 0;
   }
@@ -1291,6 +1328,7 @@ function krakeMalen() {
 }
 
 function ballonMalen(b) {
+  if (b.bombe) { bombeMalen(b); return; }
   schattenMalen(b.x, b.z, 18, 0.25);
   const p = aufsBild(b.x, b.hoehe + 18 + (b.liegt ? Math.sin(b.wippen) * 4 : 0), b.z);
   const r = 17 * p.groesse;
@@ -1315,6 +1353,8 @@ function zielMalen() {
   }
   const p = aufsBild(z.x, 0, z.z);
   let trifft = false;
+  const kb = bosse.find((x) => x.bandBoss && !x.besiegt);
+  if (kb && Math.abs(z.x - kb.x) < 90 && Math.abs(z.z - kb.z) < 75) trifft = true;
   if (krake && krake.hoch > 0.4 && !krake.besiegt) {
     const B = becken[krake.becken];
     trifft = ((z.x - B.x) / (B.rx + 35)) ** 2 + ((z.z - B.z) / (B.rz + 45)) ** 2 < 1;
@@ -1329,7 +1369,7 @@ function kuerbisBewegen() {
   if (maennchen.hoehe === 0) maennchen.nachStampf = false;    // erst wieder landen, dann zählt der nächste Sprung
   for (const k of bosse) {
     if (!k.kuerbis || k.besiegt) continue;
-    kuerbisTentakel(k);
+    if (k.angriff) kuerbisTentakel(k);
     if (k.getroffen > 0) k.getroffen = k.getroffen - 1;
     if (k.stampfPause > 0) { k.stampfPause = k.stampfPause - 1; continue; }
     const weit = Math.hypot(maennchen.x - k.x, (maennchen.z - k.z) * 1.3);
@@ -1365,9 +1405,10 @@ function kuerbisBewegen() {
         sprechblase("KNACKS!", k.x, 220, k.z);
       } else {
         k.jagt = k.jagt + 0.25;       // er wird wütend und schneller
-        k.schild = true;              // die Krake im Kürbis fährt ihre Tentakel hoch
+        if (k.mitKrake) k.schild = true;   // die Krake im Kürbis fährt ihre Tentakel hoch
         sprechblase(k.kraft === 2 ? "AUA!" : "Nur noch einmal!", k.x, 220, k.z);
-        tippZeigen("Treffer! Jetzt hat die Krake ihre <b>Tentakel</b> hochgefahren – spring drauf, dann sind sie weg. Noch <b>" + k.kraft + "-mal</b> treffen!");
+        if (k.mitKrake) tippZeigen("Treffer! Jetzt hat die Krake ihre <b>Tentakel</b> hochgefahren – spring drauf, dann sind sie weg. Noch <b>" + k.kraft + "-mal</b> treffen!");
+        else tippZeigen("Super! Noch <b>" + k.kraft + "-mal</b> draufspringen!");
       }
     }
   }
@@ -1528,6 +1569,8 @@ function platteMalen() {
 
 // Welches Bild gehört zu diesem Gegner?
 function bossBild(k) {
+  if (k.skelett) return bild.skelett;
+  if (k.bandBoss) return bild.kabumm;
   if (k.kuerbis) return bild.kuerbis;
   if (k.drache) return k.maulAuf > 0 || k.besiegt ? bild.dracheFeuer : bild.drache;
   if (!k.truhe) return bild.koenig;
@@ -1808,6 +1851,8 @@ function maennchenBewegen() {
   maennchen.z = Math.max(hintererRand, Math.min(TIEFE - 10, maennchen.z));
 
   // Lava! Wer vom Weg abkommt, verbrennt sich die Füße.
+  // Level 14: Das Laufband trägt einen nach vorne – zum Wasser!
+  if (Z.band && !rechnung && maennchen.hoehe === 0 && aufDemWeg(maennchen.x, maennchen.z)) maennchen.z = maennchen.z + BAND_TEMPO;
   if (Z.lava && !wechselt && maennchen.hoehe === 0 && !aufDemWeg(maennchen.x, maennchen.z)) inDieLava();
 
   // Level 11: In die Wasserbecken kann man nicht hineinlaufen
@@ -2060,6 +2105,10 @@ function einenBossBewegen(k) {
     if (k.wirdZuGeld) {
       // Der Riesengeist bläht sich auf, bis er platzt
       if (k.verschwinden > 45) { k.weg = true; letzterOrt = { x: k.x, z: k.z }; }
+    } else if (k.kuerbis) {
+      // Der Kürbis zerplatzt in viele Stücke
+      if (k.verschwinden === 1) for (let i = 0; i < 40; i++) sternchen(k.x + zufall(-60, 60), zufall(20, 160), k.z, i % 2 ? "#f58c1e" : "#46963c");
+      if (k.verschwinden > 30) { k.weg = true; letzterOrt = { x: k.x, z: k.z }; }
     } else {
       // Alle anderen werden ganz eingesaugt – schlüüürf!
       zumRohrZiehen(k, 4);
@@ -2073,6 +2122,10 @@ function einenBossBewegen(k) {
 
   // Level 10: Er wartet, bis man den Pümpel hat
   if (k.wartet) return;
+  // Level 14: Das Skelett liegt als Knochenhaufen da, solange das Rätsel läuft
+  if (k.zerfallen) return;
+  // Level 14: Kabumm läuft auf seiner Insel hin und her und wirft Bomben aufs Laufband
+  if (k.bandBoss) { kabummBewegen(k); return; }
   // Level 9: Der Drache spuckt Feuerbälle – immer genau auf das Männchen zu
   if (k.drache) {
     if (k.getroffen > 0) k.getroffen = k.getroffen - 1;
@@ -2126,6 +2179,14 @@ function einenBossBewegen(k) {
     k.kraft = k.kraft - SAUGKRAFT;     // der Balken wird kleiner
     k.zappeln = 1;
     zumRohrZiehen(k, k.zieht);         // er ist schwer – er rutscht nur langsam
+    if (k.kraft <= 0 && k.skelett) {
+      // Das Skelett zerfällt in seine Knochen – jetzt kommt das Rätsel!
+      k.kraft = 0; k.zerfallen = true;
+      plumpsTon();
+      sprechblase("Klapper-di-klapp!", k.x, 200, k.z);
+      setTimeout(raetselStellen, 900);
+      return;
+    }
     if (k.kraft <= 0) {
       k.kraft = 0;
       k.leben = k.leben - 1;
@@ -2253,14 +2314,14 @@ function alleBosseBesiegt() {
     setTimeout(koenigsMelodie, 300);
     zaehlerZeigen("Geisterkönig: besiegt!");
     tippZeigen("Du hast den <b>Geisterkönig</b> besiegt! Die Tür ist offen – auf zu Level 2!");
-  } else if (zimmer === 3 || zimmer === 6 || zimmer === 12 || zimmer === 14 || zimmer === 16 || zimmer === 17 || zimmer === 19) {
+  } else if (zimmer === 3 || zimmer === 6 || zimmer === 12 || zimmer === 14 || zimmer === 16 || zimmer === 17 || zimmer === 19 || zimmer === 29) {
     tuerOffen = true;
     setTimeout(siegesMelodie, 300);
     if (zimmer === 6) zaehlerZeigen("Kronen-Geist: besiegt!");
     if (zimmer === 12 || zimmer === 16) zaehlerZeigen("Truhe: eingesaugt!");
     if (zimmer === 17) zaehlerZeigen("Lava-Geist: besiegt!");
     const geschafftText = { 3: "Alle drei besiegt!", 6: "Besiegt!", 12: "Die Truhe ist eingesaugt!", 14: "Beide besiegt!",
-                            16: "Der Truhen-Boss ist eingesaugt!", 17: "Der Lava-Geist ist weg!", 19: "Beide Blink-Könige besiegt!" };
+                            16: "Der Truhen-Boss ist eingesaugt!", 17: "Der Lava-Geist ist weg!", 19: "Beide Blink-Könige besiegt!", 29: "Der Kürbis ist kaputt!" };
     if (zimmer === 19) { kanonen = []; dynamit = []; }      // die Kanone hört auf
     tippZeigen(geschafftText[zimmer] + " Die <b>Tür hinten</b> ist offen!");
   } else if (ZIMMER[zimmer].geld) {
@@ -2708,6 +2769,61 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     bannerZeigen("Level 10");
   }
 
+  if (nummer === 29) {
+    // Level 14, erster Raum: der Kürbis – diesmal ohne Krake. Dreimal draufspringen, dann geht die Tür auf.
+    maennchen.x = 450; maennchen.z = 520;
+    maennchen.hatSauger = false;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    bosse = [bossMachen({
+      name: "Kürbis", kuerbis: true, x: 450, z: 260, groesse: 170, kraftMax: 3, schwebt: 0, zMin: 120, tiefFaktor: 0.8,
+      radius: 62, jagt: 0.8, jagdPhasen: true, dx: 0.9, dz: 0.6, stoss: 14, ruf: "RUMMS!", balkenOben: true,
+    })];
+    bosse[0].getroffen = 0; bosse[0].stampfPause = 0; bosse[0].schubsPause = 150;
+    zaehlerZeigen("Der Kürbis!");
+    tippZeigen("Ein <b>Kürbis</b>! Spring <b>dreimal</b> auf ihn drauf – " + springTipp + ".");
+    bannerZeigen("Level 14");
+  }
+
+  if (nummer === 30) {
+    // Level 14, zweiter Raum: das Skelett. Saug es weg – dann kommt das Figuren-Rätsel.
+    maennchen.x = 450; maennchen.z = 520;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    bosse = [bossMachen({
+      name: "Skelett", skelett: true, x: 450, z: 230, groesse: 250, kraftMax: 150, schwebt: 0, zMin: 120, tiefFaktor: 0.8,
+      radius: 70, jagt: 1.0, jagdPhasen: true, dx: 0.8, dz: 0.5, stoss: 14, ruf: "KLAPPER!", balkenOben: true,
+    })];
+    bosse[0].schubsPause = 150;
+    zaehlerZeigen("Das Skelett!");
+    tippZeigen("Ein <b>Skelett</b>! Saug es weg – dann musst du ein <b>Rätsel</b> lösen.");
+    bannerZeigen("Das Skelett!");
+    setTimeout(() => {
+      if (zimmer === 30 && bosse[0]) { lachTon(); sprechblase("Klapper, klapper! Hehehe!", bosse[0].x, 290, bosse[0].z); }
+    }, 900);
+  }
+
+  if (nummer === 31) {
+    // Level 14, letzter Raum: Kabumm steht hinten auf seiner Insel. Das Laufband fährt auf einen zu,
+    // vorne ist Wasser. Kabumm wirft Bomben aufs Band – einsammeln und zurückwerfen! Jede Bombe: 5 von 100.
+    maennchen.x = 450; maennchen.z = 330;
+    maennchen.hatSauger = false;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    tinteModus = true;
+    bosse = [bossMachen({
+      name: "Kabumm", bandBoss: true, x: 450, z: 95, groesse: 210, kraftMax: 100, schwebt: 0, zMin: 60,
+      radius: 0, jagt: 0, dx: 1.2, dz: 0, balkenOben: true, wirdZuGeld: true,
+    })];
+    bosse[0].bombenUhr = 60; bosse[0].getroffen = 0; bosse[0].schubsPause = 99999;
+    zaehlerZeigen("Kabumm: 100 von 100");
+    tippZeigen("Das <b>Laufband</b> fährt dich zum Wasser – lauf dagegen an! Sammle die <b>Bomben</b> und wirf sie auf Kabumm.");
+    bannerZeigen("Kabumm!");
+    setTimeout(() => {
+      if (zimmer === 31 && bosse[0]) { lachTon(); sprechblase("Ich bin Kabumm! Ab ins Wasser mit dir!", bosse[0].x, 280, bosse[0].z); }
+    }, 900);
+  }
+
   if (nummer === 26) {
     // Level 13, erster Raum – so hat Arthur es gemalt: in der Mitte ein großes Becken mit der Krake,
     // oben links und rechts zwei kleine Becken, hinten die Tür. Hier wehrt sich die Krake noch nicht.
@@ -2752,6 +2868,7 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     })];
     bosse[0].getroffen = 0; bosse[0].stampfPause = 0; bosse[0].schubsPause = 150; bosse[0].schild = false;
     bosse[0].angriff = { zustand: "warten", uhr: 240, rx: 0, rz: 1, ox: 0, oz: 0, laenge: 0 };
+    bosse[0].mitKrake = true;
     zaehlerZeigen("Der Kürbis!");
     tippZeigen("Der böse <b>Kürbis</b> – und die <b>Krake</b> sitzt drin! Spring <b>dreimal</b> auf ihn drauf – " + springTipp + ". Pass auf die <b>rote Linie</b> auf!");
     bannerZeigen("Der Kürbis!");
@@ -3045,12 +3162,31 @@ function wasserMalen(Z) {
     malen.strokeStyle = "rgba(255,255,255,0.45)"; malen.lineWidth = 3;
     malen.beginPath(); malen.arc(p.x, p.y, 16 * p.groesse, 3.5, 5.9); malen.stroke();
   }
+  if (Z.band) { laufbandMalen(Z); return; }
   for (const [x1, z1, x2, z2] of Z.weg) {
     const a = Math.max(0, z1);
     flaeche([[x1 - 8, 0, a], [x2 + 8, 0, a], [x2 + 8, 0, z2 + 8], [x1 - 8, 0, z2 + 8]], "#3b2412");
     flaeche([[x1, 0, a], [x2, 0, a], [x2, 0, z2], [x1, 0, z2]], "#9c6b3c");
     for (let z = a + 18; z < z2; z = z + 18) linie([x1, 0, z], [x2, 0, z], "#6b4423", 3);   // die Bretter
     linie([x1, 0, a], [x1, 0, z2], "#3b2412", 5); linie([x2, 0, a], [x2, 0, z2], "#3b2412", 5);
+  }
+}
+
+function laufbandMalen(Z) {
+  const [x1, z1, x2, z2] = Z.weg[0];
+  // Kabumms Insel hinten
+  flaeche([[150, 0, 40], [750, 0, 40], [750, 0, 150], [150, 0, 150]], "#8e99a6", 5);
+  // das Laufband: graue Fläche mit Streifen, die nach vorne wandern
+  flaeche([[x1 - 8, 0, z1 - 8], [x2 + 8, 0, z1 - 8], [x2 + 8, 0, z2 + 8], [x1 - 8, 0, z2 + 8]], "#111014");
+  flaeche([[x1, 0, z1], [x2, 0, z1], [x2, 0, z2], [x1, 0, z2]], "#4a4f5a");
+  const versatz = (zeit * BAND_TEMPO) % 40;
+  for (let z = z1 + versatz; z < z2; z = z + 40) {
+    flaeche([[x1, 0, z], [x2, 0, z], [x2, 0, Math.min(z2, z + 16)], [x1, 0, Math.min(z2, z + 16)]], "rgba(255,255,255,0.10)");
+  }
+  // Pfeile zeigen, wohin das Band fährt
+  for (const ax of [200, 450, 700]) {
+    const az = z1 + 60 + ((zeit * BAND_TEMPO) % 240);
+    if (az < z2 - 30) flaeche([[ax - 26, 0, az], [ax + 26, 0, az], [ax, 0, az + 30]], "rgba(255, 211, 77, 0.6)");
   }
 }
 
@@ -3225,7 +3361,7 @@ function kisteMalen() {
 
 function bossMalen(k) {
   // Umgefallen? Dann kippt er zur Seite: 0 = steht gerade, 1 = liegt flach.
-  let kipp = 0;
+  let kipp = k.zerfallen ? 1 : 0;
   if (k.liegt > 150) kipp = (170 - k.liegt) / 20;
   else if (k.liegt > 50) kipp = 1;
   else if (k.liegt > 0) kipp = k.liegt / 50;
@@ -3247,7 +3383,7 @@ function bossMalen(k) {
   schattenMalen(k.x, k.z, groesse * 0.38, 0.3);
   const p = aufsBild(k.x + zittern, schweben, k.z);
   // Ein goldenes Leuchten um ihn herum – beim Blinken leuchtet es rot
-  if (kipp === 0 && !k.truhe && !k.drache && !k.kuerbis) {
+  if (kipp === 0 && !k.truhe && !k.drache && !k.kuerbis && !k.skelett && !k.bandBoss) {
     malen.fillStyle = k.blinktGerade ? "rgba(255, 40, 80, " + (zeit % 8 < 4 ? 0.45 : 0.15) + ")"
                                      : "rgba(255, 211, 77, " + (0.12 + 0.06 * Math.sin(zeit * 0.1)) + ")";
     malen.beginPath(); malen.arc(p.x, p.y - groesse * p.groesse * 0.5, groesse * p.groesse * 0.55, 0, 6.28); malen.fill();
@@ -3255,13 +3391,14 @@ function bossMalen(k) {
   malen.globalAlpha = k.blinktGerade && zeit % 8 < 4 ? 0.35 : 0.95;       // beim Blinken flackert er
   if (k.wut > 0 && !k.kuerbis) malen.filter = "hue-rotate(150deg) saturate(1.5)";       // nach dem Schubsen leuchtet er rot vor Wut
   if (k.besiegt && k.wirdZuGeld && zeit % 6 < 3) malen.filter = "sepia(1) saturate(4) brightness(1.3)";   // er wird golden
-  if (k.drache || k.kuerbis) malen.globalAlpha = 1;
+  if (k.drache || k.kuerbis || k.skelett || k.bandBoss) malen.globalAlpha = 1;
+  if (k.bandBoss && k.getroffen > 0 && zeit % 4 < 2) malen.filter = "brightness(2.2)";
   if (k.kuerbis && k.getroffen > 0) {       // plattgedrückt!
     malen.save(); malen.translate(p.x, p.y); malen.scale(1.25, 0.6 + 0.4 * (1 - k.getroffen / 24)); malen.translate(-p.x, -p.y);
     k.platt = true;
   }
   if (k.getroffen > 0 && zeit % 4 < 2) malen.filter = "brightness(2.2)";                                  // PLOPP – er blitzt weiß
-  if (k.kuerbis && kipp === 0 && !k.besiegt) kuerbisKrakeMalen(k, p.x, p.y, groesse * p.groesse);
+  if (k.kuerbis && k.mitKrake && kipp === 0 && !k.besiegt) kuerbisKrakeMalen(k, p.x, p.y, groesse * p.groesse);
   if (kipp > 0) {
     malen.save();
     malen.translate(p.x, p.y);
@@ -3443,6 +3580,154 @@ function teufelFrageMalen() {
   malen.textAlign = "left"; malen.textBaseline = "middle";
   malen.fillText(text, x + 22, y + 41);
   malen.textBaseline = "alphabetic";
+}
+
+// ---- Level 14: das Figuren-Rätsel vom Skelett -------------------------
+// Drei Figuren in einer Reihe – keine darf doppelt sein. Eine ist falsch (rot durchgestrichen).
+// Welche Figur gehört an ihren Platz? Dafür hat man 20 Sekunden.
+const FIGUREN = ["■", "▲", "●"];
+function raetselStellen() {
+  if (zimmer !== 30) return;
+  const reihe = mischen(FIGUREN.slice());
+  const falsch = Math.floor(Math.random() * 3);
+  const richtigeFigur = reihe[falsch];
+  // An die falsche Stelle kommt eine Figur, die es in der Reihe schon gibt
+  const andere = reihe.filter((f, i) => i !== falsch);
+  reihe[falsch] = andere[Math.floor(Math.random() * 2)];
+  rechnung = { art: "raetsel", reihe, falsch, summe: richtigeFigur, uhr: RAETSEL_ZEIT, phase: "fragen" };
+  rechnung.antworten = mischen(FIGUREN.slice());
+  antwortKnoepfe.forEach((knopf, i) => {
+    const f = rechnung.antworten[i];
+    knopf.innerHTML = '<span style="color:' + (f === "■" ? "#3a6edc" : f === "▲" ? "#e8343e" : "#2fa84f") + '">' + f + "</span>";
+    knopf.disabled = false; knopf.classList.remove("falsch");
+  });
+  document.getElementById("antworten").hidden = false;
+  warnTon();
+  zaehlerZeigen("Rätsel!");
+  tippZeigen("In einer Reihe darf <b>keine Figur doppelt</b> sein. Welche Figur gehört an die rote Stelle? Schnell – <b>20 Sekunden</b>!");
+}
+function raetselUhrBewegen() {
+  if (!rechnung || rechnung.art !== "raetsel" || rechnung.phase !== "fragen" || levelWahlOffen) return;
+  rechnung.uhr = rechnung.uhr - 1;
+  if (rechnung.uhr % 60 === 0 && rechnung.uhr <= 300 && rechnung.uhr > 0) piep(880, 880, 0.06, "square", 0, 0.1);   // tick, tick …
+  if (rechnung.uhr <= 0) raetselVerloren("Die Zeit ist um!");
+}
+function raetselGeloest() {
+  rechnung.phase = "fertig";
+  antwortKnoepfe.forEach((k) => { k.disabled = true; });
+  siegesMelodie();
+  tippZeigen("Richtig! Das Skelett ist <b>für immer</b> kaputt. Die <b>Tür hinten</b> ist offen!");
+  zaehlerZeigen("Rätsel gelöst!");
+  setTimeout(() => {
+    document.getElementById("antworten").hidden = true;
+    rechnung = null;
+    const k = bosse.find((b) => b.skelett);
+    if (k) { for (let i = 0; i < 40; i++) sternchen(k.x + zufall(-60, 60), zufall(10, 120), k.z, i % 2 ? "#f5f2e6" : "#ffd34d"); k.weg = true; }
+    bosse = bosse.filter((b) => !b.weg);
+    tuerOffen = true;
+  }, 900);
+}
+function raetselVerloren(grund) {
+  rechnung.phase = "falsch";
+  antwortKnoepfe.forEach((k) => { k.disabled = true; });
+  falschTon();
+  zaehlerZeigen(grund);
+  tippZeigen(grund + " Richtig wäre <b>" + rechnung.summe + "</b> gewesen. Oh nein – das Skelett setzt sich wieder zusammen!");
+  setTimeout(() => {
+    document.getElementById("antworten").hidden = true;
+    rechnung = null;
+    const k = bosse.find((b) => b.skelett);
+    if (k) {
+      k.zerfallen = false; k.kraft = k.kraftMax; k.schubsPause = 90;
+      lachTon();
+      sprechblase("Hehehe! Ich bin wieder da!", k.x, 260, k.z);
+      tippZeigen("Das <b>Skelett</b> ist wieder da – saug es nochmal weg!");
+    }
+  }, 1800);
+}
+// Zeichnet eine Rätsel-Figur: Quadrat, Dreieck oder Kreis
+function figurMalen(figur, x, y, r) {
+  malen.fillStyle = figur === "■" ? "#3a6edc" : figur === "▲" ? "#e8343e" : "#2fa84f";
+  malen.strokeStyle = "#111014"; malen.lineWidth = 5; malen.lineJoin = "round";
+  malen.beginPath();
+  if (figur === "■") malen.rect(x - r, y - r, 2 * r, 2 * r);
+  else if (figur === "▲") { malen.moveTo(x, y - r * 1.1); malen.lineTo(x + r * 1.1, y + r * 0.9); malen.lineTo(x - r * 1.1, y + r * 0.9); malen.closePath(); }
+  else malen.arc(x, y, r, 0, 6.283);
+  malen.fill(); malen.stroke();
+}
+function raetselMalen() {
+  if (!rechnung || rechnung.art !== "raetsel") return;
+  const x = 260, y = 90, b = 440, h = 200;
+  malen.fillStyle = "#fff4fa"; malen.strokeStyle = "#111014"; malen.lineWidth = 5;
+  malen.beginPath(); malen.roundRect(x, y, b, h, 26); malen.fill(); malen.stroke();
+  malen.fillStyle = "#111014"; malen.font = "800 24px 'Baloo 2', sans-serif"; malen.textAlign = "center";
+  malen.fillText("Welche Figur gehört an die rote Stelle?", x + b / 2, y + 38);
+  for (let i = 0; i < 3; i++) {
+    const fx = x + 110 + i * 110, fy = y + 112;
+    malen.fillStyle = i === rechnung.falsch ? "#ffd6dc" : "#eef3ff";
+    malen.beginPath(); malen.roundRect(fx - 44, fy - 44, 88, 88, 16); malen.fill();
+    figurMalen(rechnung.reihe[i], fx, fy, 30);
+    if (i === rechnung.falsch) {
+      malen.strokeStyle = "#e8343e"; malen.lineWidth = 7;
+      malen.beginPath(); malen.moveTo(fx - 36, fy - 36); malen.lineTo(fx + 36, fy + 36); malen.moveTo(fx + 36, fy - 36); malen.lineTo(fx - 36, fy + 36); malen.stroke();
+    }
+  }
+  // Die Zeit läuft ab
+  const rest = Math.max(0, rechnung.uhr) / RAETSEL_ZEIT;
+  malen.fillStyle = "#3a2a3a"; malen.beginPath(); malen.roundRect(x + 30, y + h - 30, b - 60, 14, 7); malen.fill();
+  malen.fillStyle = rest < 0.25 ? "#e8343e" : "#6fd3ff";
+  malen.beginPath(); malen.roundRect(x + 30, y + h - 30, Math.max(8, (b - 60) * rest), 14, 7); malen.fill();
+  malen.fillStyle = "#111014"; malen.font = "800 18px 'Baloo 2', sans-serif";
+  malen.textAlign = "left";
+  malen.fillText(Math.ceil(Math.max(0, rechnung.uhr) / 60) + " s", x + b - 26, y + h - 18);
+  malen.textAlign = "center";
+}
+
+// ---- Level 14: Kabumm auf dem Laufband --------------------------------
+function kabummBewegen(k) {
+  if (k.getroffen > 0) k.getroffen = k.getroffen - 1;
+  k.x = k.x + k.dx;
+  if (k.x < 180 || k.x > 720) k.dx = -k.dx;
+  // Er wirft Bomben aufs Laufband – die kann man dann aufsammeln
+  k.bombenUhr = k.bombenUhr - 1;
+  if (k.bombenUhr <= 0 && !wechselt && !geschafft) {
+    k.bombenUhr = 170 + Math.floor(zufall(-30, 30));
+    if (ballons.length + maennchen.tinte < 4) {
+      ballons.push({ x: k.x, z: k.z, startX: k.x, startZ: k.z, zielX: zufall(150, 750), zielZ: zufall(220, 300),
+                     flug: 0, hoehe: 120, vonKanone: true, liegt: false, wippen: 0, bombe: true });
+      sprechblase("Hahaha!", k.x, 260, k.z);
+    }
+  }
+}
+function kabummGetroffen(k) {
+  k.kraft = Math.max(0, k.kraft - BOMBE_SCHADEN);
+  k.getroffen = 20;
+  bummTon(); plumpsTon();
+  for (let i = 0; i < 24; i++) sternchen(k.x + zufall(-60, 60), zufall(60, 220), k.z, i % 2 ? "#ffb347" : "#ff5a5a");
+  if (k.kraft <= 0) {
+    k.besiegt = true;
+    riesenSchluerf();
+    sprechblase("KA-BUMM! Neiiin!", k.x, 300, k.z);
+  } else {
+    sprechblase(["AUA!", "Hey!", "Das kitzelt!", "Grrr!"][Math.floor(Math.random() * 4)], k.x, 280, k.z);
+    zaehlerZeigen("Kabumm: " + k.kraft + " von 100");
+  }
+}
+function bombeMalen(b) {
+  schattenMalen(b.x, b.z, 18, 0.25);
+  const p = aufsBild(b.x, b.hoehe + 18 + (b.liegt ? Math.sin(b.wippen) * 3 : 0), b.z);
+  const r = 17 * p.groesse;
+  if (b.liegt) {
+    malen.fillStyle = "rgba(255, 211, 77, " + (0.25 + 0.15 * Math.sin(zeit * 0.12)) + ")";
+    malen.beginPath(); malen.arc(p.x, p.y, r * 2, 0, 6.28); malen.fill();
+  }
+  malen.fillStyle = "#111014"; malen.beginPath(); malen.arc(p.x, p.y, r + 3, 0, 6.28); malen.fill();
+  malen.fillStyle = "#3d3a44"; malen.beginPath(); malen.arc(p.x, p.y, r, 0, 6.28); malen.fill();
+  malen.fillStyle = "rgba(255,255,255,0.5)"; malen.beginPath(); malen.arc(p.x - r * 0.35, p.y - r * 0.35, r * 0.28, 0, 6.28); malen.fill();
+  malen.strokeStyle = "#c8a46a"; malen.lineWidth = 3;
+  malen.beginPath(); malen.moveTo(p.x + r * 0.4, p.y - r * 0.8); malen.lineTo(p.x + r * 0.8, p.y - r * 1.4); malen.stroke();
+  malen.fillStyle = zeit % 6 < 3 ? "#ffd34d" : "#ff7a2a";
+  malen.beginPath(); malen.arc(p.x + r * 0.85, p.y - r * 1.5, 4, 0, 6.28); malen.fill();
 }
 
 // Ein kleiner Kraft-Balken direkt über dem Kopf (für die drei Kronen-Geister).
@@ -3635,6 +3920,7 @@ function allesMalen() {
   sprechblasenMalen();
   rechnungMalen();
   teufelFrageMalen();
+  raetselMalen();
   herzenMalen();
   zaehlerImBildMalen();
   bannerMalen();
@@ -3785,6 +4071,7 @@ function spielSchleife() {
   if (!wechselt && !pause) bosseBewegen();
   kisteBewegen();
   if (!pause) { kanonenBewegen(); dynamitBewegen(); truheBewegen(); platteBewegen(); hauenBewegen(); knopfBewegen(); krakeBewegen(); ballonsBewegen(); wurfBewegen(); kuerbisBewegen(); }
+  raetselUhrBewegen();
   geldBewegen();
   effekteBewegen();
   saugTonAnpassen();
