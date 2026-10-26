@@ -243,7 +243,8 @@
 //  Level 14: Zimmer 29 – der Kürbis zum Draufspringen
 //            Zimmer 30 – das Skelett und das Figuren-Rätsel
 //            Zimmer 31 – Kabumm auf dem Laufband (Bomben werfen!)
-//  Level 2 bis 14 hat Arthur selbst erfunden.
+//  Level 15: Zimmer 32 – das große Skelett (mehr Leben) und das Figuren-Rätsel
+//  Level 2 bis 15 hat Arthur selbst erfunden.
 // ================================================================
 
 // ---- 0. Stellschrauben -------------------------------------------
@@ -449,6 +450,9 @@ const ZIMMER = {
   31: { level: 14, hinten: "#1d2f4a", links: "#192840", rechts: "#152236", streifen: "rgba(255,255,255,0.07)",
         herzen: true, herzenAnfang: 5, springen: true, tinte: true, band: true, lava: true, wasser: true,
         start: [450, 330], weg: [[30, 175, 870, 492]], kerzen: true, geld: GELD_LEVEL_3 },
+  // Level 15 – nur ein Raum: das große Skelett
+  32: { level: 15, hinten: "#1f1f26", links: "#1a1a20", rechts: "#15151a", streifen: "rgba(255,255,255,0.06)",
+        herzen: true, herzenAnfang: 5, springen: true, geisterBeissen: true, kerzen: true },
   22: { level: 9, hinten: "#3b2418", links: "#331f15", rechts: "#2b1a11", streifen: "rgba(255,140,40,0.10)",
         herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
 };
@@ -2984,6 +2988,26 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     bannerZeigen("Level 10");
   }
 
+  if (nummer === 32) {
+    // Level 15 – so hat Arthur es gemalt: ein großes Skelett, größer als das andere und mit mehr Leben.
+    // Ist es weggesaugt, kommt das Figuren-Rätsel – und dann ist das Level geschafft.
+    maennchen.x = 450; maennchen.z = 540;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    bosse = [bossMachen({
+      name: "Großes Skelett", skelett: true, x: 450, z: 300, groesse: 400, kraftMax: 320, schwebt: 0, zMin: 280, tiefFaktor: 0.55,
+      radius: 120, reichweite: 350, zieht: 0.3, jagt: 1.0, jagdPhasen: true, dx: 0.8, dz: 0.5, stoss: 18, ruf: "KLAPPER!",
+      balkenOben: true,
+    })];
+    bosse[0].schubsPause = 200; bosse[0].jagdUhr = 220;
+    zaehlerZeigen("Das große Skelett!");
+    tippZeigen("Das <b>große Skelett</b> – es hält viel mehr aus! Saug es weg, dann kommt das <b>Rätsel</b>.");
+    bannerZeigen("Level 15");
+    setTimeout(() => {
+      if (zimmer === 32 && bosse[0]) { lachTon(); sprechblase("Ich bin das größte Skelett der Welt!", bosse[0].x, 420, bosse[0].z); }
+    }, 900);
+  }
+
   if (nummer === 29) {
     // Level 14, erster Raum: der Kürbis – diesmal ohne Krake. Dreimal draufspringen, dann geht die Tür auf.
     maennchen.x = 450; maennchen.z = 520;
@@ -3802,7 +3826,7 @@ function teufelFrageMalen() {
 // Welche Figur gehört an ihren Platz? Dafür hat man 20 Sekunden.
 const FIGUREN = ["■", "▲", "●"];
 function raetselStellen() {
-  if (zimmer !== 30) return;
+  if (!bosse.some((b) => b.skelett && b.zerfallen)) return;
   const reihe = mischen(FIGUREN.slice());
   const falsch = Math.floor(Math.random() * 3);
   const richtigeFigur = reihe[falsch];
@@ -3830,8 +3854,10 @@ function raetselUhrBewegen() {
 function raetselGeloest() {
   rechnung.phase = "fertig";
   antwortKnoepfe.forEach((k) => { k.disabled = true; });
+  const letztesZimmer = !ZIMMER[zimmer].tuerHinten;      // Level 15: Nach dem Rätsel ist das Level geschafft
   siegesMelodie();
-  tippZeigen("Richtig! Das Skelett ist <b>für immer</b> kaputt. Die <b>Tür hinten</b> ist offen!");
+  tippZeigen(letztesZimmer ? "Richtig! Das große Skelett ist <b>für immer</b> kaputt!"
+                           : "Richtig! Das Skelett ist <b>für immer</b> kaputt. Die <b>Tür hinten</b> ist offen!");
   zaehlerZeigen("Rätsel gelöst!");
   setTimeout(() => {
     document.getElementById("antworten").hidden = true;
@@ -3839,8 +3865,18 @@ function raetselGeloest() {
     const k = bosse.find((b) => b.skelett);
     if (k) { for (let i = 0; i < 40; i++) sternchen(k.x + zufall(-60, 60), zufall(10, 120), k.z, i % 2 ? "#f5f2e6" : "#ffd34d"); k.weg = true; }
     bosse = bosse.filter((b) => !b.weg);
-    tuerOffen = true;
+    if (letztesZimmer) levelGeschafft(); else tuerOffen = true;
   }, 900);
+}
+// Ein Level ohne Geld am Ende ist geschafft (Level 15): der Knopf zum nächsten Level erscheint
+function levelGeschafft() {
+  geschafft = true;
+  const weiter = document.getElementById("nochmal");
+  weiter.textContent = ZIMMER[zimmer + 1] ? "Weiter zu Level " + ZIMMER[zimmer + 1].level : "Nochmal spielen";
+  weiter.hidden = false;
+  koenigsMelodie();
+  zaehlerZeigen("Geschafft!");
+  tippZeigen("<b>Level " + ZIMMER[zimmer].level + " geschafft!</b>");
 }
 function raetselVerloren(grund) {
   rechnung.phase = "falsch";
