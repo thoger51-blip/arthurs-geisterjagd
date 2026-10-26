@@ -1851,18 +1851,36 @@ function musikSpieler(name) {
   if (musik.spieler[name]) return musik.spieler[name];
   const a = new Audio();
   a.loop = true;
-  const sp = { audio: a, regler: null, bereit: false };
+  const sp = { audio: a, regler: null, bereit: false, modus: "audio", daten: null, quelle: null, wartet: 0 };
   musik.spieler[name] = sp;
   // Über die Lautstärke-Regler von Web Audio (so klappt das Überblenden auch auf dem iPad)
   try {
-    if (ton) { const quelle = ton.createMediaElementSource(a); sp.regler = ton.createGain(); sp.regler.gain.value = 0; quelle.connect(sp.regler); sp.regler.connect(ton.destination); }
-  } catch (e) { sp.regler = null; }
+    if (ton) { sp.regler = ton.createGain(); sp.regler.gain.value = 0; sp.regler.connect(ton.destination);
+               ton.createMediaElementSource(a).connect(sp.regler); }
+  } catch (e) { /* dann eben ohne */ }
   if (!sp.regler) a.volume = 0;
-  // Das Lied ganz laden (dann merkt es sich auch der Offline-Speicher)
-  fetch(MUSIK[name]).then((antwort) => (antwort.ok ? antwort.blob() : Promise.reject()))
-    .then((daten) => { a.src = URL.createObjectURL(daten); sp.bereit = true; })
+  // Klappt das Abspielen über den Audio-Spieler nicht (z. B. in der Claude-Vorschau), spielen wir das Lied direkt über Web Audio
+  a.addEventListener("error", () => musikDirekt(sp));
+  fetch(MUSIK[name]).then((antwort) => (antwort.ok ? antwort.arrayBuffer() : Promise.reject()))
+    .then((daten) => { sp.daten = daten; a.src = URL.createObjectURL(new Blob([daten], { type: "audio/mpeg" })); sp.bereit = true; })
     .catch(() => { a.src = MUSIK[name]; sp.bereit = true; });
   return sp;
+}
+
+// Plan B: das Lied in Web Audio entschlüsseln und als Endlosschleife abspielen
+function musikDirekt(sp) {
+  if (sp.modus === "direkt" || !ton || !sp.daten || !sp.regler) return;
+  sp.modus = "direkt";
+  try { sp.audio.pause(); } catch (e) { /* egal */ }
+  ton.decodeAudioData(sp.daten.slice(0)).then((puffer) => { sp.puffer = puffer; musikDirektVonVorne(sp); }).catch(() => { /* dann ohne Musik */ });
+}
+function musikDirektVonVorne(sp) {
+  if (!sp.puffer) return;
+  try { if (sp.quelle) sp.quelle.stop(); } catch (e) { /* egal */ }
+  sp.quelle = ton.createBufferSource();
+  sp.quelle.buffer = sp.puffer; sp.quelle.loop = true;
+  sp.quelle.connect(sp.regler);
+  sp.quelle.start(0);
 }
 
 function musikStarten() {
@@ -1881,8 +1899,9 @@ function musikBewegen() {
     musik.wechselUhr = musik.wechselUhr + 1;
     if (musik.wechselUhr > 40) {               // erst wechseln, wenn es wirklich so bleibt
       musik.gewuenscht = soll; musik.wechselUhr = 0;
-      const neu = musik.spieler[soll];
-      if (neu && neu.audio.paused) neu.audio.currentTime = 0;   // ein neuer Boss: das Lied fängt von vorne an
+      const neu = musik.spieler[soll];         // ein neuer Boss: das Lied fängt von vorne an
+      if (neu && neu.modus === "audio" && neu.audio.paused) neu.audio.currentTime = 0;
+      if (neu && neu.modus === "direkt" && musik.laut[soll] === 0) musikDirektVonVorne(neu);
     }
   } else musik.wechselUhr = 0;
   for (const name of ["level", "boss"]) {
@@ -1892,7 +1911,15 @@ function musikBewegen() {
     const l = musik.laut[name];
     musik.laut[name] = ziel > l ? Math.min(ziel, l + 0.012) : Math.max(ziel, l - 0.02);
     if (sp.regler) sp.regler.gain.value = musik.laut[name]; else sp.audio.volume = musik.laut[name];
-    if (ziel > 0 && sp.bereit && sp.audio.paused) sp.audio.play().catch(() => { /* erst nach dem nächsten Tippen */ });
+    if (sp.modus !== "audio") continue;
+    if (ziel > 0 && sp.bereit && sp.audio.paused) {
+      sp.audio.play().catch((e) => { if (e && e.name === "NotSupportedError") musikDirekt(sp); });
+    }
+    // Wächter: Soll das Lied laufen, kommt aber nach 3 Sekunden immer noch nichts? Dann Plan B.
+    if (ziel > 0 && sp.bereit && sp.daten) {
+      sp.wartet = sp.audio.currentTime > 0 ? 0 : sp.wartet + 1;
+      if (sp.wartet > 180) musikDirekt(sp);
+    }
     if (musik.laut[name] === 0 && !sp.audio.paused) sp.audio.pause();
   }
 }
