@@ -3153,24 +3153,29 @@ function musterUeber(ecken, muster, deckkraft) {
 }
 
 // Weiches Licht von oben, dunklere Ecken (wie unter einer Lampe)
-let lichtBild = null;
+let lichtBilder = {};
 function lichtMalen() {
-  if (lichtBild) { malen.drawImage(lichtBild, 0, 0); return; }
-  const c = document.createElement("canvas"); c.width = 960; c.height = 600;
-  const echt = malen; malen = c.getContext("2d");
-  lichtMalenEinmal();
-  malen = echt; lichtBild = c;
-  malen.drawImage(lichtBild, 0, 0);
+  const art = gruselZimmer ? "grusel" : "normal";
+  if (!lichtBilder[art]) {
+    const c = document.createElement("canvas"); c.width = 960; c.height = 600;
+    const echt = malen; malen = c.getContext("2d");
+    lichtMalenEinmal();
+    malen = echt; lichtBilder[art] = c;
+  }
+  malen.drawImage(lichtBilder[art], 0, 0);
 }
 function lichtMalenEinmal() {
+  const g = gruselZimmer;
+  const lf = g ? "190, 175, 255" : "255, 244, 220";          // im Boss-Zimmer kaltes Mondlicht
   const licht = malen.createRadialGradient(480, 120, 40, 480, 160, 560);
-  licht.addColorStop(0, "rgba(255, 244, 220, 0.16)");
-  licht.addColorStop(0.55, "rgba(255, 244, 220, 0.04)");
-  licht.addColorStop(1, "rgba(255, 244, 220, 0)");
+  licht.addColorStop(0, "rgba(" + lf + ", " + (g ? 0.1 : 0.16) + ")");
+  licht.addColorStop(0.55, "rgba(" + lf + ", 0.04)");
+  licht.addColorStop(1, "rgba(" + lf + ", 0)");
   malen.fillStyle = licht; malen.fillRect(0, 0, 960, 600);
-  const rand = malen.createRadialGradient(480, 300, 260, 480, 300, 640);
+  if (g) { malen.fillStyle = "rgba(12, 0, 28, 0.12)"; malen.fillRect(0, 0, 960, 600); }
+  const rand = malen.createRadialGradient(480, 300, g ? 200 : 260, 480, 300, 640);
   rand.addColorStop(0, "rgba(20, 0, 30, 0)");
-  rand.addColorStop(1, "rgba(20, 0, 30, " + SCHOEN.vignette + ")");
+  rand.addColorStop(1, "rgba(20, 0, 30, " + (g ? 0.7 : SCHOEN.vignette) + ")");
   malen.fillStyle = rand; malen.fillRect(0, 0, 960, 600);
 }
 
@@ -3197,10 +3202,10 @@ function staubBewegen() {
   }
 }
 function staubMalen() {
-  malen.fillStyle = "#fff6e6";
+  malen.fillStyle = gruselZimmer ? "#ffb35c" : "#fff6e6";
   for (const k of staub) {
     const p = aufsBild(k.x, k.y, k.z);
-    malen.globalAlpha = 0.18 + 0.18 * Math.sin(k.phase * 2);
+    malen.globalAlpha = (gruselZimmer ? 0.3 : 0.18) + 0.18 * Math.sin(k.phase * 2);
     malen.beginPath(); malen.arc(p.x, p.y, k.groesse * p.groesse, 0, 6.28); malen.fill();
   }
   malen.globalAlpha = 1;
@@ -3246,6 +3251,133 @@ function sternMalen(x, y, r, farbe, deckkraft) {
   malen.closePath(); malen.fill();
 }
 
+
+// ---- 15c. Halloween in den Boss-Zimmern -----------------------------
+// Wo ein großer Boss wartet, wird es dunkler und gruseliger: Kürbis-Laternen, Fledermäuse,
+// Spinnweben, Nebel am Boden und ein voller Mond. Auch das ist nur fürs Aussehen.
+let gruselZimmer = false;
+function istGruselZimmer() {
+  return bosse.some((b) => b.balkenOben || b.bandBoss) || !!krake || !!(truhe && truhe.extra && truhe.extra.balkenOben);
+}
+const LATERNEN = [{ x: 70, z: 30, g: 1.3 }, { x: 165, z: 18, g: 0.85 }, { x: 830, z: 30, g: 1.3 }];
+let fledermaeuse = [], nebel = [], nebelBild = null, scheinBild = null;
+function gruselVorbereiten() {
+  fledermaeuse = [];
+  for (let i = 0; i < 4; i++) {
+    fledermaeuse.push({ x: zufall(0, 1160), y: zufall(18, 80), tempo: zufall(0.6, 1.2) * (i % 2 ? 1 : -1),
+                        phase: zufall(0, 6.28), groesse: zufall(0.75, 1.15) });
+  }
+  nebel = [];
+  for (let i = 0; i < 9; i++) nebel.push({ x: zufall(0, BREITE + 400), z: zufall(6, 150), tempo: zufall(0.12, 0.35), r: zufall(130, 210) });
+  if (!nebelBild) {
+    const c = document.createElement("canvas"); c.width = 128; c.height = 128;
+    const m = c.getContext("2d");
+    const v = m.createRadialGradient(64, 64, 0, 64, 64, 64);
+    v.addColorStop(0, "rgba(225, 205, 255, 0.34)"); v.addColorStop(1, "rgba(225, 205, 255, 0)");
+    m.fillStyle = v; m.fillRect(0, 0, 128, 128);
+    nebelBild = c;
+  }
+}
+
+// Spinnweben oben in den Ecken (kommt mit in den Hintergrund)
+function spinnwebeMalen(x, y, r) {
+  malen.strokeStyle = "rgba(235, 228, 250, 0.45)"; malen.lineWidth = 1.3;
+  const speichen = [];
+  for (let i = 0; i <= 6; i++) speichen.push(Math.PI * (0.04 + 0.92 * i / 6));
+  for (const w of speichen) { malen.beginPath(); malen.moveTo(x, y); malen.lineTo(x + Math.cos(w) * r, y + Math.sin(w) * r); malen.stroke(); }
+  for (let k = 1; k <= 4; k++) {
+    const rr = r * k / 4.3;
+    malen.beginPath();
+    speichen.forEach((w, i) => {
+      const px = x + Math.cos(w) * rr, py = y + Math.sin(w) * rr;
+      if (i === 0) { malen.moveTo(px, py); return; }
+      const m = (w + speichen[i - 1]) / 2;
+      malen.quadraticCurveTo(x + Math.cos(m) * rr * 0.8, y + Math.sin(m) * rr * 0.8, px, py);
+    });
+    malen.stroke();
+  }
+}
+
+// Nebel kriecht hinten über den Boden
+function nebelMalen() {
+  const weite = BREITE + 400;
+  malen.save();
+  malen.beginPath();
+  [[0, 0, TIEFE], [0, 0, 0], [0, 45, 0], [BREITE, 45, 0], [BREITE, 0, 0], [BREITE, 0, TIEFE]].forEach(([x, y, z], i) => {
+    const q = aufsBild(x, y, z); if (i === 0) malen.moveTo(q.x, q.y); else malen.lineTo(q.x, q.y);
+  });
+  malen.closePath(); malen.clip();
+  for (const n of nebel) {
+    const x = (((n.x + zeit * n.tempo) % weite) + weite) % weite - 200;
+    const p = aufsBild(x, 0, n.z);
+    const w = n.r * p.groesse * 2, h = w * 0.3;
+    malen.globalAlpha = 0.7 + 0.3 * Math.sin(zeit * 0.012 + n.r);
+    malen.drawImage(nebelBild, p.x - w / 2, p.y - h * 0.75, w, h);
+  }
+  malen.restore();
+  malen.globalAlpha = 1;
+}
+
+// Kleine Fledermäuse flattern vor der Rückwand herum – mit freundlichen gelben Augen
+function fledermaeuseMalen() {
+  const oben = aufsBild(0, WANDHOEHE, 0).y;
+  for (const f of fledermaeuse) {
+    const x = (((f.x + zeit * f.tempo) % 1160) + 1160) % 1160 - 100;
+    const y = oben + f.y + Math.sin(zeit * 0.045 + f.phase) * 14;
+    const s = 15 * f.groesse, schlag = Math.sin(zeit * 0.38 + f.phase);
+    malen.fillStyle = "#1a0f22";
+    for (const seite of [-1, 1]) {
+      const pkt = [[0.25, -0.05], [0.9, -0.75 * schlag - 0.1], [1.75, -0.45 * schlag], [1.45, 0.18], [1.1, 0.02], [0.8, 0.32], [0.45, 0.12], [0.25, 0.22]];
+      malen.beginPath();
+      pkt.forEach(([px, py], i) => { if (i === 0) malen.moveTo(x + px * s * seite, y + py * s); else malen.lineTo(x + px * s * seite, y + py * s); });
+      malen.closePath(); malen.fill();
+    }
+    malen.beginPath(); malen.ellipse(x, y, s * 0.36, s * 0.46, 0, 0, 6.28); malen.fill();
+    malen.beginPath();
+    malen.moveTo(x - s * 0.3, y - s * 0.25); malen.lineTo(x - s * 0.22, y - s * 0.72); malen.lineTo(x - s * 0.05, y - s * 0.38);
+    malen.moveTo(x + s * 0.3, y - s * 0.25); malen.lineTo(x + s * 0.22, y - s * 0.72); malen.lineTo(x + s * 0.05, y - s * 0.38);
+    malen.fill();
+    malen.fillStyle = "#ffd34d";
+    malen.beginPath(); malen.arc(x - s * 0.13, y - s * 0.12, s * 0.09, 0, 6.28); malen.arc(x + s * 0.13, y - s * 0.12, s * 0.09, 0, 6.28); malen.fill();
+  }
+}
+
+// Eine Kürbis-Laterne mit flackerndem Licht drin
+function laterneMalen(l) {
+  const p = aufsBild(l.x, 0, l.z), s = 50 * l.g * p.groesse;
+  const fl = 0.86 + 0.1 * Math.sin(zeit * 0.31 + l.x) + 0.06 * Math.sin(zeit * 0.83 + l.x);
+  const cy = p.y - s * 0.47;
+  if (!scheinBild) {
+    const c = document.createElement("canvas"); c.width = 128; c.height = 128;
+    const m = c.getContext("2d"), v = m.createRadialGradient(64, 64, 5, 64, 64, 64);
+    v.addColorStop(0, "rgba(255, 150, 40, 0.38)"); v.addColorStop(1, "rgba(255, 150, 40, 0)");
+    m.fillStyle = v; m.fillRect(0, 0, 128, 128); scheinBild = c;
+  }
+  const sr = s * 2.7 * fl;
+  malen.drawImage(scheinBild, p.x - sr, cy - sr, sr * 2, sr * 2);
+  malen.fillStyle = "rgba(20, 0, 20, 0.35)";
+  malen.beginPath(); malen.ellipse(p.x, p.y, s * 0.85, s * 0.2, 0, 0, 6.28); malen.fill();
+  malen.strokeStyle = "#111014"; malen.lineWidth = Math.max(1.5, 2.6 * p.groesse);
+  for (const [dx, rx, farbe] of [[-0.4, 0.42, "#c9581a"], [0.4, 0.42, "#c9581a"], [0, 0.5, "#ec8326"]]) {
+    malen.fillStyle = farbe;
+    malen.beginPath(); malen.ellipse(p.x + dx * s, cy, rx * s, 0.47 * s, 0, 0, 6.28); malen.fill(); malen.stroke();
+  }
+  malen.fillStyle = "rgba(255, 220, 160, 0.35)";
+  malen.beginPath(); malen.ellipse(p.x - s * 0.16, cy - s * 0.24, s * 0.1, s * 0.16, -0.4, 0, 6.28); malen.fill();
+  malen.fillStyle = "#4f6b2c";
+  malen.beginPath(); malen.rect(p.x - s * 0.07, cy - s * 0.62, s * 0.14, s * 0.2); malen.fill(); malen.stroke();
+  // Das Gesicht leuchtet
+  malen.fillStyle = "rgb(255, " + Math.round(190 + 50 * fl) + ", 70)";
+  const form = (pkt) => {
+    malen.beginPath();
+    pkt.forEach(([px, py], i) => { if (i === 0) malen.moveTo(p.x + px * s, cy + py * s); else malen.lineTo(p.x + px * s, cy + py * s); });
+    malen.closePath(); malen.fill();
+  };
+  form([[-0.32, -0.04], [-0.1, -0.04], [-0.21, -0.26]]);
+  form([[0.32, -0.04], [0.1, -0.04], [0.21, -0.26]]);
+  form([[-0.34, 0.07], [-0.2, 0.15], [-0.08, 0.08], [0.04, 0.15], [0.17, 0.08], [0.34, 0.07], [0.22, 0.27], [0, 0.32], [-0.22, 0.27]]);
+}
+
 // ---- 16. Das Zimmer malen ----------------------------------------
 // Malt eine Fläche mit vielen Ecken (jede Ecke ist ein Punkt im Zimmer)
 function flaeche(ecken, farbe, rand) {
@@ -3270,6 +3402,8 @@ function hintergrundBauen() {
   const Z = ZIMMER[zimmer];
   const B = BREITE, T = TIEFE, H = WANDHOEHE;
   const c = document.createElement("canvas"); c.width = 960; c.height = 600;
+  gruselZimmer = istGruselZimmer();
+  if (gruselZimmer) gruselVorbereiten();
   const echt = malen;
   malen = c.getContext("2d");
   malen.fillStyle = "#2b1030";
@@ -3280,10 +3414,11 @@ function hintergrundBauen() {
   flaeche([[0, 0, 0], [0, 0, T], [0, H, T], [0, H, 0]], Z.links);
   flaeche([[B, 0, 0], [B, 0, T], [B, H, T], [B, H, 0]], Z.rechts);
   // Tapeten-Streifen
-  for (let x = 45; x < B; x = x + 90) linie([x, 0, 0], [x, H, 0], Z.streifen, 10);
+  const streifen = gruselZimmer ? "rgba(255, 140, 40, 0.09)" : Z.streifen;
+  for (let x = 45; x < B; x = x + 90) linie([x, 0, 0], [x, H, 0], streifen, 10);
   for (let z = 45; z < T; z = z + 90) {
-    linie([0, 0, z], [0, H, z], Z.streifen, 8);
-    linie([B, 0, z], [B, H, z], Z.streifen, 8);
+    linie([0, 0, z], [0, H, z], streifen, 8);
+    linie([B, 0, z], [B, H, z], streifen, 8);
   }
   // Die Wände sehen aus wie Stoff
   if (!stoffMuster) { stoffMuster = musterMachen("stoff"); holzMuster = musterMachen("holz"); }
@@ -3295,6 +3430,11 @@ function hintergrundBauen() {
   const wandLicht = malen.createLinearGradient(0, wandOben, 0, wandUnten);
   wandLicht.addColorStop(0, "rgba(10, 0, 20, 0.28)"); wandLicht.addColorStop(1, "rgba(10, 0, 20, 0)");
   flaeche([[0, 0, 0], [B, 0, 0], [B, H, 0], [0, H, 0]], wandLicht);
+  if (gruselZimmer) {                                     // Boss-Zimmer: die Wände werden dunkel
+    flaeche([[0, 0, 0], [B, 0, 0], [B, H, 0], [0, H, 0]], "rgba(8, 0, 18, 0.4)");
+    flaeche([[0, 0, 0], [0, 0, T], [0, H, T], [0, H, 0]], "rgba(8, 0, 18, 0.45)");
+    flaeche([[B, 0, 0], [B, 0, T], [B, H, T], [B, H, 0]], "rgba(8, 0, 18, 0.45)");
+  }
 
   // Der pinke Fußboden mit Dielen
   flaeche([[0, 0, 0], [B, 0, 0], [B, 0, T], [0, 0, T]], "#ff69b4");
@@ -3304,6 +3444,19 @@ function hintergrundBauen() {
   }
   musterUeber([[0, 0, 0], [B, 0, 0], [B, 0, T], [0, 0, T]], holzMuster, SCHOEN.holz);
   eckenSchattenMalen();
+  if (gruselZimmer) {                                     // ... und der Boden wird dämmrig-lila
+    flaeche([[0, 0, 0], [B, 0, 0], [B, 0, T], [0, 0, T]], "rgba(34, 0, 46, 0.34)");
+    const l = aufsBild(0, H, 0), r = aufsBild(B, H, 0);
+    malen.save();
+    malen.beginPath();
+    for (const wand of [[[0, 0, 0], [B, 0, 0], [B, H, 0], [0, H, 0]], [[0, 0, 0], [0, 0, T], [0, H, T], [0, H, 0]], [[B, 0, 0], [B, 0, T], [B, H, T], [B, H, 0]]]) {
+      wand.forEach(([x, y, z], i) => { const q = aufsBild(x, y, z); if (i === 0) malen.moveTo(q.x, q.y); else malen.lineTo(q.x, q.y); });
+      malen.closePath();
+    }
+    malen.clip();
+    spinnwebeMalen(l.x, l.y, 84); spinnwebeMalen(r.x, r.y, 84);
+    malen.restore();
+  }
   malen = echt;
   hintergrund = { zimmer, bild: c };
 }
@@ -3324,10 +3477,19 @@ function zimmerMalen() {
       malen.fillRect(st.x, st.y, 3, 3);
     }
     const mond = aufsBild(505, 190, 0);
-    malen.fillStyle = "#fff3b0";
-    malen.beginPath(); malen.arc(mond.x, mond.y, 20, 0, 6.28); malen.fill();
-    malen.fillStyle = "#1b1640";
-    malen.beginPath(); malen.arc(mond.x - 9, mond.y - 5, 17, 0, 6.28); malen.fill();
+    if (gruselZimmer) {                                   // Vollmond im Boss-Zimmer
+      malen.fillStyle = "rgba(255, 200, 110, 0.25)";
+      malen.beginPath(); malen.arc(mond.x - 30, mond.y + 8, 36, 0, 6.28); malen.fill();
+      malen.fillStyle = "#ffd98a";
+      malen.beginPath(); malen.arc(mond.x - 30, mond.y + 8, 26, 0, 6.28); malen.fill();
+      malen.fillStyle = "rgba(200, 140, 60, 0.35)";
+      malen.beginPath(); malen.arc(mond.x - 38, mond.y + 2, 6, 0, 6.28); malen.arc(mond.x - 22, mond.y + 16, 4, 0, 6.28); malen.fill();
+    } else {
+      malen.fillStyle = "#fff3b0";
+      malen.beginPath(); malen.arc(mond.x, mond.y, 20, 0, 6.28); malen.fill();
+      malen.fillStyle = "#1b1640";
+      malen.beginPath(); malen.arc(mond.x - 9, mond.y - 5, 17, 0, 6.28); malen.fill();
+    }
     linie([(fx1 + fx2) / 2, fy1, 0], [(fx1 + fx2) / 2, fy2, 0], "#111014", 7);
     linie([fx1, (fy1 + fy2) / 2, 0], [fx2, (fy1 + fy2) / 2, 0], "#111014", 7);
   }
@@ -4196,6 +4358,7 @@ function allesMalen() {
   malen.save();
   if (wackeln > 0.3) malen.translate(zufall(-wackeln, wackeln), zufall(-wackeln, wackeln) * 0.7);
   zimmerMalen();
+  if (gruselZimmer) { nebelMalen(); fledermaeuseMalen(); }
   kuerbisWarnungMalen();
   // Der große Kraft-Balken hängt hinten an der Wand – die Krone vom Riesengeist ragt manchmal darüber
   for (const k of bosse) if (k.balkenOben) kraftBalkenObenMalen(k);
@@ -4219,6 +4382,7 @@ function allesMalen() {
   for (const g of geister) figuren.push({ z: g.z, malen: () => geistMalen(g) });
   for (const k of bosse) figuren.push({ z: k.z, malen: () => bossMalen(k) });
   for (const g of geld) figuren.push({ z: g.z, malen: () => geldImZimmerMalen(g) });
+  if (gruselZimmer && !ZIMMER[zimmer].lava) for (const l of LATERNEN) figuren.push({ z: l.z, malen: () => laterneMalen(l) });
   if (kiste) figuren.push({ z: kiste.z, malen: kisteMalen });
   for (const k of kanonen) figuren.push({ z: k.z, malen: () => kanoneMalen(k) });
   if (truhe) figuren.push({ z: truhe.z, malen: truheMalen });
