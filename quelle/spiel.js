@@ -1602,7 +1602,7 @@ function truheMalen() {
 let ton = null;
 let saugGeraeusch = null;
 function tonStarten() {
-  if (ton) { if (ton.state === "suspended") ton.resume(); return; }
+  if (ton) { if (ton.state === "suspended") ton.resume(); musikStarten(); return; }
   const Klang = window.AudioContext || window.webkitAudioContext;
   if (!Klang) return;
   ton = new Klang();
@@ -1616,7 +1616,82 @@ function tonStarten() {
   quelle.connect(filter); filter.connect(lautstaerke); lautstaerke.connect(ton.destination);
   quelle.start();
   saugGeraeusch = { lautstaerke, filter };
+  musikStarten();
 }
+// ---- 9b. Die Musik ------------------------------------------------
+// Zwei Lieder: eins für die normalen Räume, eins, sobald ein Boss da ist. Beim Wechsel wird übergeblendet.
+// Der ♪-Knopf oben links schaltet die Musik an und aus (das merkt sich das Tablet).
+const MUSIK = { level: "musik/level.mp3", boss: "musik/boss.mp3" };
+const MUSIK_LAUT = 0.32;          // so laut ist die Musik (1 = ganz laut) – die Geräusche sollen noch gut zu hören sein
+let musikAn = true;
+try { musikAn = localStorage.getItem("geisterjagd-musik") !== "aus"; } catch (e) { /* egal */ }
+const musik = { gestartet: false, gewuenscht: "level", wechselUhr: 0, spieler: {}, laut: { level: 0, boss: 0 } };
+
+function musikSpieler(name) {
+  if (musik.spieler[name]) return musik.spieler[name];
+  const a = new Audio();
+  a.loop = true;
+  const sp = { audio: a, regler: null, bereit: false };
+  musik.spieler[name] = sp;
+  // Über die Lautstärke-Regler von Web Audio (so klappt das Überblenden auch auf dem iPad)
+  try {
+    if (ton) { const quelle = ton.createMediaElementSource(a); sp.regler = ton.createGain(); sp.regler.gain.value = 0; quelle.connect(sp.regler); sp.regler.connect(ton.destination); }
+  } catch (e) { sp.regler = null; }
+  if (!sp.regler) a.volume = 0;
+  // Das Lied ganz laden (dann merkt es sich auch der Offline-Speicher)
+  fetch(MUSIK[name]).then((antwort) => (antwort.ok ? antwort.blob() : Promise.reject()))
+    .then((daten) => { a.src = URL.createObjectURL(daten); sp.bereit = true; })
+    .catch(() => { a.src = MUSIK[name]; sp.bereit = true; });
+  return sp;
+}
+
+function musikStarten() {
+  if (musik.gestartet || !ton) return;
+  musik.gestartet = true;
+  musikSpieler("level");
+  setTimeout(() => musikSpieler("boss"), 4000);      // das Boss-Lied lädt etwas später nach
+}
+
+function musikBewegen() {
+  if (!musik.gestartet) return;
+  // Ist gerade ein Boss da? (Ein großer Balken oben, die Krake oder Kabumm)
+  const bossDa = bosse.some((b) => (b.balkenOben || b.bandBoss) && !b.besiegt && !b.wartet) || (krake && !krake.besiegt);
+  const soll = bossDa ? "boss" : "level";
+  if (soll !== musik.gewuenscht) {
+    musik.wechselUhr = musik.wechselUhr + 1;
+    if (musik.wechselUhr > 40) {               // erst wechseln, wenn es wirklich so bleibt
+      musik.gewuenscht = soll; musik.wechselUhr = 0;
+      const neu = musik.spieler[soll];
+      if (neu && neu.audio.paused) neu.audio.currentTime = 0;   // ein neuer Boss: das Lied fängt von vorne an
+    }
+  } else musik.wechselUhr = 0;
+  for (const name of ["level", "boss"]) {
+    const sp = name === musik.gewuenscht ? musikSpieler(name) : musik.spieler[name];
+    if (!sp) continue;
+    const ziel = musikAn && !document.hidden && name === musik.gewuenscht ? MUSIK_LAUT : 0;
+    const l = musik.laut[name];
+    musik.laut[name] = ziel > l ? Math.min(ziel, l + 0.012) : Math.max(ziel, l - 0.02);
+    if (sp.regler) sp.regler.gain.value = musik.laut[name]; else sp.audio.volume = musik.laut[name];
+    if (ziel > 0 && sp.bereit && sp.audio.paused) sp.audio.play().catch(() => { /* erst nach dem nächsten Tippen */ });
+    if (musik.laut[name] === 0 && !sp.audio.paused) sp.audio.pause();
+  }
+}
+
+function musikUmschalten() {
+  musikAn = !musikAn;
+  try { localStorage.setItem("geisterjagd-musik", musikAn ? "an" : "aus"); } catch (e) { /* egal */ }
+  musikKnopfZeigen();
+  tonStarten();
+}
+function musikKnopfZeigen() {
+  const k = document.getElementById("musikknopf");
+  k.textContent = "♪";
+  k.classList.toggle("aus", !musikAn);
+  k.setAttribute("aria-label", musikAn ? "Musik ausschalten" : "Musik einschalten");
+}
+document.getElementById("musikknopf").addEventListener("click", musikUmschalten);
+musikKnopfZeigen();
+
 function saugTonAnpassen() {
   if (!saugGeraeusch) return;
   saugGeraeusch.lautstaerke.gain.setTargetAtTime(saugtGerade ? 0.12 : 0, ton.currentTime, 0.05);
@@ -4114,6 +4189,7 @@ function spielSchleife() {
   geldBewegen();
   effekteBewegen();
   saugTonAnpassen();
+  musikBewegen();
   allesMalen();
   requestAnimationFrame(spielSchleife);
 }
