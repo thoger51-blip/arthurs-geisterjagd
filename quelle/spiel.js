@@ -127,7 +127,7 @@ function ladeBilder(fertig) {
 // Das Zimmer ist ein echter Raum mit drei Richtungen:
 //   x = links ↔ rechts,   z = hinten ↕ vorne,   y = wie hoch etwas schwebt.
 const leinwand = document.getElementById("spielfeld");
-const malen = leinwand.getContext("2d");
+let malen = leinwand.getContext("2d");   // (zum Vorbereiten des Hintergrunds malen wir kurz woanders hin)
 const BREITE = 900;       // so breit ist das Zimmer
 const TIEFE = 560;        // so tief ist das Zimmer (von der Rückwand bis vorne)
 const WANDHOEHE = 260;    // so hoch sind die Wände
@@ -1749,17 +1749,17 @@ function muenzTon()     { piep(988, 988, 0.08, "square", 0, 0.15); piep(1319, 13
 function kassenTon()    { for (let i = 0; i < 7; i++) piep(900 + i * 160, 900 + i * 160, 0.1, "square", i * 0.06, 0.12); }
 function falschTon()    { piep(220, 170, 0.3, "sawtooth", 0, 0.18); }
 function boingTon()     { piep(160, 760, 0.18, "sine", 0, 0.3); piep(760, 380, 0.22, "sine", 0.18, 0.25); piep(380, 560, 0.2, "sine", 0.4, 0.2); }
-function plumpsTon()    { piep(200, 50, 0.4, "sine", 0, 0.35); piep(90, 40, 0.3, "square", 0.05, 0.15); }
+function plumpsTon()    { kameraWackeln(5); piep(200, 50, 0.4, "sine", 0, 0.35); piep(90, 40, 0.3, "square", 0.05, 0.15); }
 function zischTon()     { piep(1400, 300, 0.5, "sawtooth", 0, 0.12); piep(700, 120, 0.4, "square", 0.05, 0.08); }
 function pflatschTon()  { piep(240, 120, 0.15, "sine", 0, 0.25); piep(500, 300, 0.1, "triangle", 0.05, 0.12); }
 function klapperTon()   { piep(520, 260, 0.04, "square", 0, 0.05); }
-function bummTon()      { piep(140, 40, 0.3, "square", 0, 0.22); piep(90, 30, 0.35, "sine", 0.02, 0.3); }
+function bummTon()      { kameraWackeln(6); piep(140, 40, 0.3, "square", 0, 0.22); piep(90, 30, 0.35, "sine", 0.02, 0.3); }
 function sprungTon()    { piep(300, 700, 0.15, "sine", 0, 0.18); }
 function ploppTon()     { piep(700, 180, 0.12, "sine", 0, 0.3); piep(160, 70, 0.15, "square", 0.03, 0.15); }
 function feuerTon()     { piep(260, 90, 0.4, "sawtooth", 0, 0.16); piep(1200, 400, 0.3, "sawtooth", 0.02, 0.06); }
 function brummTon()     { piep(90, 140, 0.35, "sawtooth", 0, 0.1); }
 function peitschTon()   { piep(1500, 200, 0.18, "sawtooth", 0, 0.15); piep(200, 80, 0.2, "square", 0.1, 0.15); }
-function puffTon()      { piep(500, 80, 0.25, "sawtooth", 0, 0.25); }
+function puffTon()      { kameraWackeln(5); piep(500, 80, 0.25, "sawtooth", 0, 0.25); }
 function warnTon()      { piep(880, 880, 0.08, "square", 0, 0.14); piep(880, 880, 0.08, "square", 0.14, 0.14); piep(1100, 1100, 0.12, "square", 0.28, 0.14); }
 function siegesMelodie() {
   const noten = [523, 659, 784, 1047, 784, 1047];
@@ -1889,7 +1889,11 @@ function maennchenBewegen() {
   if (maennchen.hoehe > 0 || maennchen.sprungTempo > 0) {
     maennchen.hoehe = maennchen.hoehe + maennchen.sprungTempo;
     maennchen.sprungTempo = maennchen.sprungTempo - SCHWERKRAFT;
-    if (maennchen.hoehe <= 0) { maennchen.hoehe = 0; maennchen.sprungTempo = 0; schrittTon(); }
+    if (maennchen.hoehe <= 0) {
+      maennchen.hoehe = 0; maennchen.sprungTempo = 0; schrittTon();
+      maennchen.quetschen = 10;                                  // beim Landen wird er kurz platt …
+      woelkchenMachen(maennchen.x, maennchen.z, 7, 2.2);         // … und es staubt
+    }
   }
   // Level 10: Über dem Ventilator wird man hochgepustet und schwebt
   if (ventilator && ventilator.an && Math.abs(maennchen.x - ventilator.x) < 75 && Math.abs(maennchen.z - ventilator.z) < 60) {
@@ -1933,7 +1937,10 @@ function maennchenBewegen() {
     // Der Schritt-Takt: bei jedem halben Takt setzt ein Fuß auf – tapp!
     const vorher = Math.floor(maennchen.schrittTakt / Math.PI);
     maennchen.schrittTakt = maennchen.schrittTakt + (saugtGerade ? 0.14 : 0.2);
-    if (Math.floor(maennchen.schrittTakt / Math.PI) !== vorher) schrittTon();
+    if (Math.floor(maennchen.schrittTakt / Math.PI) !== vorher) {
+      schrittTon();
+      if (maennchen.hoehe === 0 && !ZIMMER[zimmer].lava) woelkchenMachen(maennchen.x, maennchen.z, 1, 0.6);
+    }
 
     // Welches Bild passt? Geht es mehr zur Seite oder mehr nach vorne/hinten?
     if (Math.abs(schrittX) >= Math.abs(schrittZ) * 0.8) { maennchen.blickt = "seite"; maennchen.nachLinks = schrittX < 0; }
@@ -2024,6 +2031,7 @@ function maennchenBewegen() {
 // Ein Kronen-Geist hat das Männchen erwischt!
 function herzVerlieren(anzahl) {
   treffBlitz = 14;
+  kameraWackeln(8);
   try { if (navigator.vibrate) navigator.vibrate(80); } catch (e) { /* manche Geräte können nicht vibrieren */ }
   if (herzen > 0) {
     herzen = Math.max(0, herzen - (anzahl || 1));   // ein Herz ist weg (eine Kanonenkugel nimmt zwei)
@@ -3072,6 +3080,10 @@ function effekteBewegen() {
   if (banner) { banner.leben -= 1; if (banner.leben <= 0) banner = null; }
   if (herzHuepfer > 0) herzHuepfer -= 1;
   if (treffBlitz > 0) treffBlitz -= 1;
+  wackeln = wackeln * 0.86;
+  if (maennchen.quetschen > 0) maennchen.quetschen -= 1;
+  staubBewegen();
+  woelkchenBewegen();
 
   const duese = duesenPunkt();
   if (saugtGerade) {
@@ -3088,6 +3100,150 @@ function effekteBewegen() {
     s.leben -= 0.06;
   }
   saugStreifen = saugStreifen.filter((s) => s.leben > 0);
+}
+
+// ---- 15b. Schöner malen: Stoff, Holz, Licht, Staub und Wackeln ---------
+// Alles hier ist nur fürs Aussehen – am Spiel selbst ändert es nichts.
+const SCHOEN = { stoff: 0.16, holz: 0.13, staub: 34, vignette: 0.38 };   // wie stark die Effekte sind
+
+// Ein kleines Stoff-Muster (wie gewebt) und ein Holz-Muster – einmal gemalt, dann immer wieder benutzt
+function musterMachen(art) {
+  const c = document.createElement("canvas");
+  c.width = art === "stoff" ? 48 : 256; c.height = art === "stoff" ? 48 : 64;
+  const m = c.getContext("2d");
+  let samen = art === "stoff" ? 7 : 11;
+  const zz = () => { samen = (samen * 16807) % 2147483647; return samen / 2147483647; };   // immer dasselbe Muster
+  if (art === "stoff") {
+    for (let y = 0; y < 48; y += 3) {
+      for (let x = 0; x < 48; x += 3) {
+        const hell = ((x + y) / 3) % 2 === 0;
+        m.fillStyle = hell ? "rgba(255,255,255," + (0.35 + zz() * 0.3) + ")" : "rgba(0,0,0," + (0.3 + zz() * 0.3) + ")";
+        m.fillRect(x, y, hell ? 3 : 2, hell ? 2 : 3);
+      }
+    }
+  } else {
+    for (let i = 0; i < 14; i++) {        // Maserung: lange, leicht gewellte Linien
+      const y0 = zz() * 64, welle = 1 + zz() * 3;
+      m.strokeStyle = zz() < 0.5 ? "rgba(0,0,0,0.55)" : "rgba(255,255,255,0.5)";
+      m.lineWidth = 0.6 + zz() * 1.2;
+      m.beginPath();
+      for (let x = 0; x <= 256; x += 8) { const y = y0 + Math.sin(x / 30 + i) * welle; if (x === 0) m.moveTo(x, y); else m.lineTo(x, y); }
+      m.stroke();
+    }
+    for (let i = 0; i < 2; i++) {          // ein paar Astlöcher
+      const x = zz() * 256, y = zz() * 64;
+      m.strokeStyle = "rgba(0,0,0,0.5)"; m.lineWidth = 1;
+      m.beginPath(); m.ellipse(x, y, 7, 3, 0, 0, 6.28); m.stroke();
+    }
+  }
+  return malen.createPattern(c, "repeat");
+}
+let stoffMuster = null, holzMuster = null;
+
+// Legt ein Muster leicht über eine Fläche im Zimmer
+function musterUeber(ecken, muster, deckkraft) {
+  if (!muster) return;
+  malen.save();
+  malen.beginPath();
+  ecken.forEach(([x, y, z], i) => { const p = aufsBild(x, y, z); if (i === 0) malen.moveTo(p.x, p.y); else malen.lineTo(p.x, p.y); });
+  malen.closePath(); malen.clip();
+  malen.globalAlpha = deckkraft; malen.fillStyle = muster;
+  malen.fillRect(0, 0, 960, 600);
+  malen.restore();
+}
+
+// Weiches Licht von oben, dunklere Ecken (wie unter einer Lampe)
+let lichtBild = null;
+function lichtMalen() {
+  if (lichtBild) { malen.drawImage(lichtBild, 0, 0); return; }
+  const c = document.createElement("canvas"); c.width = 960; c.height = 600;
+  const echt = malen; malen = c.getContext("2d");
+  lichtMalenEinmal();
+  malen = echt; lichtBild = c;
+  malen.drawImage(lichtBild, 0, 0);
+}
+function lichtMalenEinmal() {
+  const licht = malen.createRadialGradient(480, 120, 40, 480, 160, 560);
+  licht.addColorStop(0, "rgba(255, 244, 220, 0.16)");
+  licht.addColorStop(0.55, "rgba(255, 244, 220, 0.04)");
+  licht.addColorStop(1, "rgba(255, 244, 220, 0)");
+  malen.fillStyle = licht; malen.fillRect(0, 0, 960, 600);
+  const rand = malen.createRadialGradient(480, 300, 260, 480, 300, 640);
+  rand.addColorStop(0, "rgba(20, 0, 30, 0)");
+  rand.addColorStop(1, "rgba(20, 0, 30, " + SCHOEN.vignette + ")");
+  malen.fillStyle = rand; malen.fillRect(0, 0, 960, 600);
+}
+
+// Schatten in den Ecken, wo Boden und Wände sich treffen
+function eckenSchattenMalen() {
+  const B = BREITE, T = TIEFE;
+  for (let i = 0; i < 4; i++) {
+    const breit = 18 + i * 18, a = 0.05;
+    flaeche([[0, 0, 0], [breit, 0, 0], [breit, 0, T], [0, 0, T]], "rgba(40, 0, 30, " + a + ")");
+    flaeche([[B - breit, 0, 0], [B, 0, 0], [B, 0, T], [B - breit, 0, T]], "rgba(40, 0, 30, " + a + ")");
+  }
+}
+
+// Staubkörnchen, die langsam durch das Licht schweben
+let staub = [];
+function staubBewegen() {
+  while (staub.length < SCHOEN.staub) {
+    staub.push({ x: zufall(40, BREITE - 40), y: zufall(30, WANDHOEHE), z: zufall(20, TIEFE - 20),
+                 dx: zufall(-0.15, 0.15), dy: zufall(-0.08, 0.12), phase: zufall(0, 6.28), groesse: zufall(1.2, 2.6) });
+  }
+  for (const k of staub) {
+    k.x += k.dx + Math.sin(zeit * 0.01 + k.phase) * 0.1; k.y += k.dy; k.phase += 0.02;
+    if (k.y > WANDHOEHE + 20 || k.y < 0 || k.x < 0 || k.x > BREITE) { k.y = zufall(20, 60); k.x = zufall(40, BREITE - 40); }
+  }
+}
+function staubMalen() {
+  malen.fillStyle = "#fff6e6";
+  for (const k of staub) {
+    const p = aufsBild(k.x, k.y, k.z);
+    malen.globalAlpha = 0.18 + 0.18 * Math.sin(k.phase * 2);
+    malen.beginPath(); malen.arc(p.x, p.y, k.groesse * p.groesse, 0, 6.28); malen.fill();
+  }
+  malen.globalAlpha = 1;
+}
+
+// Kleine Staubwölkchen bei den Schritten und beim Landen
+let woelkchen = [];
+function woelkchenMachen(x, z, anzahl, kraft) {
+  for (let i = 0; i < anzahl; i++) {
+    const w = zufall(0, 6.28);
+    woelkchen.push({ x: x + zufall(-12, 12), y: 4, z: z + zufall(-6, 6), dx: Math.cos(w) * kraft, dz: Math.sin(w) * kraft * 0.6,
+                     r: zufall(6, 11), leben: 1 });
+  }
+}
+function woelkchenBewegen() {
+  for (const w of woelkchen) { w.x += w.dx; w.z += w.dz; w.y += 0.35; w.r += 0.35; w.dx *= 0.92; w.dz *= 0.92; w.leben -= 0.035; }
+  woelkchen = woelkchen.filter((w) => w.leben > 0);
+}
+function woelkchenMalen() {
+  for (const w of woelkchen) {
+    const p = aufsBild(w.x, w.y, w.z);
+    malen.fillStyle = "rgba(255, 245, 250, " + (w.leben * 0.45) + ")";
+    malen.beginPath(); malen.arc(p.x, p.y, w.r * p.groesse, 0, 6.28); malen.fill();
+  }
+}
+
+// Das Bild wackelt kurz bei Explosionen und Treffern
+let wackeln = 0;
+function kameraWackeln(staerke) { wackeln = Math.max(wackeln, staerke); }
+
+// Glitzer als kleine Sterne mit Leuchten
+function sternMalen(x, y, r, farbe, deckkraft) {
+  malen.globalAlpha = deckkraft * 0.35;
+  malen.fillStyle = farbe;
+  malen.beginPath(); malen.arc(x, y, r * 1.8, 0, 6.28); malen.fill();
+  malen.globalAlpha = deckkraft;
+  malen.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const w = i * Math.PI / 4 + zeit * 0.05, l = i % 2 === 0 ? r * 1.6 : r * 0.55;
+    const px = x + Math.cos(w) * l, py = y + Math.sin(w) * l;
+    if (i === 0) malen.moveTo(px, py); else malen.lineTo(px, py);
+  }
+  malen.closePath(); malen.fill();
 }
 
 // ---- 16. Das Zimmer malen ----------------------------------------
@@ -3108,9 +3264,14 @@ function linie(a, b, farbe, dicke) {
   malen.beginPath(); malen.moveTo(p.x, p.y); malen.lineTo(q.x, q.y); malen.stroke();
 }
 
-function zimmerMalen() {
+// Der Hintergrund (Wände und Boden mit Stoff und Holz) ändert sich nie – den malen wir pro Zimmer nur einmal
+let hintergrund = null;
+function hintergrundBauen() {
   const Z = ZIMMER[zimmer];
   const B = BREITE, T = TIEFE, H = WANDHOEHE;
+  const c = document.createElement("canvas"); c.width = 960; c.height = 600;
+  const echt = malen;
+  malen = c.getContext("2d");
   malen.fillStyle = "#2b1030";
   malen.fillRect(0, 0, 960, 600);
 
@@ -3124,6 +3285,34 @@ function zimmerMalen() {
     linie([0, 0, z], [0, H, z], Z.streifen, 8);
     linie([B, 0, z], [B, H, z], Z.streifen, 8);
   }
+  // Die Wände sehen aus wie Stoff
+  if (!stoffMuster) { stoffMuster = musterMachen("stoff"); holzMuster = musterMachen("holz"); }
+  musterUeber([[0, 0, 0], [B, 0, 0], [B, H, 0], [0, H, 0]], stoffMuster, SCHOEN.stoff);
+  musterUeber([[0, 0, 0], [0, 0, T], [0, H, T], [0, H, 0]], stoffMuster, SCHOEN.stoff);
+  musterUeber([[B, 0, 0], [B, 0, T], [B, H, T], [B, H, 0]], stoffMuster, SCHOEN.stoff);
+  // Oben an den Wänden ist es dunkler, unten fällt das Licht hin
+  const wandOben = aufsBild(0, H, 0).y, wandUnten = aufsBild(0, 0, 0).y;
+  const wandLicht = malen.createLinearGradient(0, wandOben, 0, wandUnten);
+  wandLicht.addColorStop(0, "rgba(10, 0, 20, 0.28)"); wandLicht.addColorStop(1, "rgba(10, 0, 20, 0)");
+  flaeche([[0, 0, 0], [B, 0, 0], [B, H, 0], [0, H, 0]], wandLicht);
+
+  // Der pinke Fußboden mit Dielen
+  flaeche([[0, 0, 0], [B, 0, 0], [B, 0, T], [0, 0, T]], "#ff69b4");
+  for (let z = 0; z < T; z = z + 56) {
+    if ((z / 56) % 2 === 1) flaeche([[0, 0, z], [B, 0, z], [B, 0, z + 56], [0, 0, z + 56]], "rgba(255,255,255,0.06)");
+    linie([0, 0, z], [B, 0, z], "rgba(120, 20, 70, 0.25)", 1.5);
+  }
+  musterUeber([[0, 0, 0], [B, 0, 0], [B, 0, T], [0, 0, T]], holzMuster, SCHOEN.holz);
+  eckenSchattenMalen();
+  malen = echt;
+  hintergrund = { zimmer, bild: c };
+}
+
+function zimmerMalen() {
+  const Z = ZIMMER[zimmer];
+  const B = BREITE, T = TIEFE, H = WANDHOEHE;
+  if (!hintergrund || hintergrund.zimmer !== zimmer) hintergrundBauen();
+  malen.drawImage(hintergrund.bild, 0, 0);
 
   // Ein Fenster mit Mond an der Rückwand
   if (Z.fenster) {
@@ -3193,12 +3382,7 @@ function zimmerMalen() {
     }
   }
 
-  // Der pinke Fußboden mit Dielen
-  flaeche([[0, 0, 0], [B, 0, 0], [B, 0, T], [0, 0, T]], "#ff69b4");
-  for (let z = 0; z < T; z = z + 56) {
-    if ((z / 56) % 2 === 1) flaeche([[0, 0, z], [B, 0, z], [B, 0, z + 56], [0, 0, z + 56]], "rgba(255,255,255,0.06)");
-    linie([0, 0, z], [B, 0, z], "rgba(120, 20, 70, 0.25)", 1.5);
-  }
+  // (der Fußboden steckt schon im Hintergrund)
   // Lava mit einem schmalen Weg
   if (Z.lava) lavaMalen(Z);
   // Die Bewegungsfalle (Level 8)
@@ -3334,8 +3518,17 @@ function bildMalenAufFuessen(b, x, y, hoehe, spiegeln) {
 function schattenMalen(x, z, breite, deckkraft) {
   breite = Math.max(1, breite);            // ein Schatten ist nie kleiner als nichts
   const p = aufsBild(x, 0, z);
-  malen.fillStyle = "rgba(90, 0, 50, " + deckkraft + ")";
-  malen.beginPath(); malen.ellipse(p.x, p.y, breite * p.groesse, breite * 0.3 * p.groesse, 0, 0, 6.28); malen.fill();
+  const r = breite * p.groesse * 1.15;
+  // ein weicher Schatten: in der Mitte dunkel, am Rand verschwommen
+  malen.save();
+  malen.translate(p.x, p.y); malen.scale(1, 0.3);
+  const weich = malen.createRadialGradient(0, 0, 0, 0, 0, r);
+  weich.addColorStop(0, "rgba(60, 0, 40, " + Math.min(0.6, deckkraft * 1.5) + ")");
+  weich.addColorStop(0.6, "rgba(60, 0, 40, " + deckkraft * 0.8 + ")");
+  weich.addColorStop(1, "rgba(60, 0, 40, 0)");
+  malen.fillStyle = weich;
+  malen.beginPath(); malen.arc(0, 0, r, 0, 6.28); malen.fill();
+  malen.restore();
 }
 
 // Hier passiert der Lauf-Trick!
@@ -3355,6 +3548,9 @@ function maennchenMalen() {
 
   malen.save();
   malen.translate(p.x, p.y);                     // (0, 0) sind jetzt die Füße
+  // Beim Absprung wird er lang, beim Landen kurz platt – wie ein Gummiball
+  const qs = (maennchen.quetschen || 0) / 10, flug = maennchen.sprungTempo > 2 ? 0.08 : 0;
+  malen.scale(1 + qs * 0.22 - flug * 0.5, 1 - qs * 0.22 + flug);
   if (maennchen.blickt === "seite" && maennchen.nachLinks) malen.scale(-1, 1);
 
   const bw = b.width, bh = b.height;
@@ -3975,18 +4171,30 @@ function sprechblasenMalen() {
 function bannerMalen() {
   if (!banner) return;
   malen.globalAlpha = Math.max(0, Math.min(1, banner.leben / 25, (130 - banner.leben) / 10));
+  // Es springt herein: erst zu groß, dann federt es zurück
+  const t = Math.min(1, (130 - banner.leben) / 18);
+  const gross = t < 1 ? 0.4 + 0.6 * (1 + 2.2 * Math.pow(t - 1, 3) + 1.2 * Math.pow(t - 1, 2)) : 1;
+  malen.save();
+  malen.translate(480, 285); malen.scale(gross, gross);
   malen.font = "800 78px 'Baloo 2', sans-serif";
   malen.textAlign = "center";
   malen.lineJoin = "round";
+  malen.fillStyle = "rgba(17, 16, 20, 0.35)";
+  malen.fillText(banner.text, 4, 21);
   malen.strokeStyle = "#111014"; malen.lineWidth = 14;
-  malen.strokeText(banner.text, 480, 300);
-  malen.fillStyle = "#ffd34d";
-  malen.fillText(banner.text, 480, 300);
+  malen.strokeText(banner.text, 0, 15);
+  const gold = malen.createLinearGradient(0, -45, 0, 20);
+  gold.addColorStop(0, "#fff0a8"); gold.addColorStop(1, "#ffc21a");
+  malen.fillStyle = gold;
+  malen.fillText(banner.text, 0, 15);
+  malen.restore();
   malen.globalAlpha = 1;
 }
 
 // ---- 19. Alles zusammen malen --------------------------------------
 function allesMalen() {
+  malen.save();
+  if (wackeln > 0.3) malen.translate(zufall(-wackeln, wackeln), zufall(-wackeln, wackeln) * 0.7);
   zimmerMalen();
   kuerbisWarnungMalen();
   // Der große Kraft-Balken hängt hinten an der Wand – die Krone vom Riesengeist ragt manchmal darüber
@@ -4033,6 +4241,7 @@ function allesMalen() {
     },
   });
   figuren.sort((a, b) => a.z - b.z);
+  woelkchenMalen();
   for (const f of figuren) f.malen();
 
   zielMalen();
@@ -4050,11 +4259,13 @@ function allesMalen() {
   // Glitzer
   for (const s of glitzer) {
     const p = aufsBild(s.x, s.y, s.z);
-    malen.globalAlpha = Math.max(0, s.leben / 40);
-    malen.fillStyle = s.farbe;
-    malen.beginPath(); malen.arc(p.x, p.y, 5 * p.groesse, 0, 6.28); malen.fill();
+    sternMalen(p.x, p.y, 5 * p.groesse, s.farbe, Math.max(0, Math.min(1, s.leben / 40)));
   }
   malen.globalAlpha = 1;
+  staubMalen();
+
+  lichtMalen();
+  malen.restore();
 
   // Die Anzeigen kommen ganz obendrauf
   for (const k of bosse) if (!k.balkenOben) kraftBalkenUeberKopfMalen(k);
@@ -4090,8 +4301,12 @@ function allesMalen() {
 
   // Beim Zimmerwechsel wird alles dunkel
   if (blende > 0) {
-    malen.fillStyle = "rgba(17, 16, 20, " + Math.min(1, blende) + ")";
-    malen.fillRect(0, 0, 960, 600);
+    const m = aufsBild(maennchen.x, 80, maennchen.z);
+    const r = (1 - Math.min(1, blende)) * 1150;
+    malen.fillStyle = "#111014";
+    malen.beginPath(); malen.rect(0, 0, 960, 600);
+    if (r > 1) malen.arc(m.x, m.y, r, 0, 6.283, true);
+    malen.fill("evenodd");
   }
 }
 
