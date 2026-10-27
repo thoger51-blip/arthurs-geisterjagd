@@ -3378,6 +3378,113 @@ function laterneMalen(l) {
   form([[-0.34, 0.07], [-0.2, 0.15], [-0.08, 0.08], [0.04, 0.15], [0.17, 0.08], [0.34, 0.07], [0.22, 0.27], [0, 0.32], [-0.22, 0.27]]);
 }
 
+// ---- 15d. Echtes Licht: Kerzen, Kürbisse, Geister und Feuer beleuchten das Zimmer ----
+// Wir malen jedes Bild eine "Licht-Karte": überall etwas dunkel, und um jede Lampe herum hell
+// und farbig. Die legen wir dann über das Zimmer – so wird alles in der Nähe einer Kerze orange,
+// in der Nähe eines Geistes blau. Ist ein Gerät zu langsam, schaltet sich das von selbst ab.
+const LICHT = { an: true, langsam: 0, letzte: 0, schnitt: 16 };
+let lichtKarte = null, lk = null, scheinKarte = null, sk = null;
+const LK = 4;            // die Licht-Karte ist viermal kleiner als das Bild – Licht ist ja sowieso weich
+const lichtSprites = {};
+function lichtSprite(rgb) {                      // ein runder Lichtfleck in einer Farbe, einmal gemalt
+  if (lichtSprites[rgb]) return lichtSprites[rgb];
+  const c = document.createElement("canvas"); c.width = 128; c.height = 128;
+  const m = c.getContext("2d"), v = m.createRadialGradient(64, 64, 0, 64, 64, 64);
+  v.addColorStop(0, "rgba(" + rgb + ", 1)"); v.addColorStop(0.35, "rgba(" + rgb + ", 0.55)");
+  v.addColorStop(0.7, "rgba(" + rgb + ", 0.16)"); v.addColorStop(1, "rgba(" + rgb + ", 0)");
+  m.fillStyle = v; m.fillRect(0, 0, 128, 128);
+  return (lichtSprites[rgb] = c);
+}
+function hexZuRgb(hex) {
+  if (typeof hex !== "string" || hex.length !== 7) return "255,255,255";
+  return parseInt(hex.slice(1, 3), 16) + "," + parseInt(hex.slice(3, 5), 16) + "," + parseInt(hex.slice(5, 7), 16);
+}
+
+// Sammelt alle Lampen im Zimmer: { x, y, z, rgb, r (Reichweite), k (Kraft), g (Leuchten obendrauf) }
+function lampenSammeln() {
+  const L = [], Z = ZIMMER[zimmer], B = BREITE;
+  const add = (x, y, z, rgb, r, k, g) => L.push({ x, y, z, rgb, r, k, g: g || 0 });
+  // Grundlicht: im normalen Zimmer eine warme Deckenlampe, im Boss-Zimmer kaltes Mondlicht
+  if (gruselZimmer) add(450, 0, 260, "70,70,120", 1500, 1, 0);
+  else add(450, 0, 280, "70,62,50", 1700, 1, 0);
+  if (Z.kerzen) for (const kx of [170, 730]) add(kx, 185, 0, "255,165,80", 560, 0.9 + Math.sin(zeit * 0.4 + kx) * 0.1, 0.16);
+  if (gruselZimmer && !Z.lava) for (const l of LATERNEN) {
+    add(l.x, 30, l.z, "255,140,40", 470 * l.g, 0.85 + 0.12 * Math.sin(zeit * 0.31 + l.x) + 0.06 * Math.sin(zeit * 0.83 + l.x), 0.14);
+  }
+  if (Z.fenster) add(450, 140, 0, "130,140,230", 620, gruselZimmer ? 0.7 : 0.35, 0.06);
+  if (Z.lava && !Z.wasser) {
+    for (let i = 0; i < 28; i += 3) add((i * 137) % B + Math.sin(zeit * 0.02 + i) * 20, 0, (i * 89) % TIEFE, "255,120,40", 380, 0.55 + 0.15 * Math.sin(zeit * 0.05 + i * 1.7), 0.06);
+  }
+  if (tuerOffen && Z.tuerRechts) add(B, 90, (TUER.von + TUER.bis) / 2, "255,211,77", 420, 0.9, 0.18);
+  if (tuerOffen && Z.tuerHinten && !Z.tuerHinten.zu) add((Z.tuerHinten.von + Z.tuerHinten.bis) / 2, 90, 0, "255,211,77", 420, 0.9, 0.18);
+  for (const g of geister) if (!g.weg) add(g.x, 70, g.z, "90,170,255", 420, 0.85, 0.32);
+  for (const k of bosse) {
+    if (k.besiegt && !k.wirdZuGeld) continue;
+    if (k.kuerbis) add(k.x, 90, k.z, "255,140,40", 480, 0.85, 0.12);
+    else if (k.bandBoss) add(k.x, 240, k.z, "255,180,80", 220, 0.6 + 0.3 * Math.sin(zeit * 0.9), 0.12);
+    else if (!k.truhe && !k.drache && !k.skelett) add(k.x, 130, k.z, k.blinktGerade ? "255,60,90" : "90,170,255", 680, 0.9, 0.28);
+  }
+  for (const d of dynamit) {
+    if (d.art === "feuer") add(d.x, 60, d.z, "255,140,40", 420, 1, 0.35);
+    else if (d.art === "dynamit") add(d.x, 60, d.z, "255,180,80", 170, 0.6, 0.1);
+  }
+  for (const k of kanonen) if (k.rueckstoss > 5 && (k.art === "dynamit" || k.art === "kugel")) add(k.x, 60, k.z, "255,170,70", 340, k.rueckstoss / 12, 0.3);
+  let n = 0;
+  for (const g of glitzer) { if (n++ > 30) break; add(g.x, g.y, g.z, hexZuRgb(g.farbe), 150, Math.max(0, Math.min(1, g.leben / 40)) * 0.45, 0.08); }
+  for (const g of geld) add(g.x, 20, g.z, "255,211,77", 220, 0.55, 0.12);
+  if (!maennchen.hatSauger && !sauger.versteckt) add(sauger.x, 20, sauger.z, "255,211,77", 300, 0.6, 0.14);
+  // Das Männchen hat immer ein kleines bisschen Licht dabei, damit man es im Dunkeln gut sieht
+  add(maennchen.x, 70, maennchen.z, "255,235,225", 330, gruselZimmer ? 0.55 : 0.15, 0);
+  return L;
+}
+
+function echtesLichtMalen() {
+  if (!LICHT.an) return;
+  // Läuft das Spiel zu langsam, schalten wir das Licht ab (Spiel geht vor Schönheit)
+  const jetzt = performance.now(), d = jetzt - LICHT.letzte;
+  LICHT.letzte = jetzt;
+  if (d > 0 && d < 200) {
+    LICHT.schnitt = LICHT.schnitt * 0.97 + d * 0.03;
+    LICHT.langsam = LICHT.schnitt > 21 ? LICHT.langsam + 1 : 0;
+    if (LICHT.langsam > 200) { LICHT.an = false; return; }
+  }
+  if (!lichtKarte) {
+    lichtKarte = document.createElement("canvas"); lichtKarte.width = 960 / LK; lichtKarte.height = 600 / LK;
+    lk = lichtKarte.getContext("2d");
+    scheinKarte = document.createElement("canvas"); scheinKarte.width = 960 / LK; scheinKarte.height = 600 / LK;
+    sk = scheinKarte.getContext("2d");
+  }
+  const Z = ZIMMER[zimmer];
+  const lampen = lampenSammeln();
+  lk.globalCompositeOperation = "source-over"; lk.globalAlpha = 1;
+  lk.fillStyle = Z.lava && !Z.wasser ? (gruselZimmer ? "rgb(170, 115, 105)" : "rgb(215, 180, 170)")
+               : gruselZimmer ? "rgb(104, 88, 140)" : "rgb(205, 194, 218)";
+  lk.fillRect(0, 0, 960 / LK, 600 / LK);
+  lk.globalCompositeOperation = "lighter";
+  sk.globalCompositeOperation = "source-over"; sk.globalAlpha = 1;
+  sk.clearRect(0, 0, 960 / LK, 600 / LK);
+  sk.globalCompositeOperation = "lighter";
+  for (const l of lampen) {
+    const p = aufsBild(l.x, l.y, l.z), r = l.r * p.groesse / 2 / LK, sp = lichtSprite(l.rgb);
+    lk.globalAlpha = Math.max(0, Math.min(1, l.k));
+    lk.drawImage(sp, p.x / LK - r, p.y / LK - r, r * 2, r * 2);
+    if (l.g) {                                   // farbiger Schein obendrauf
+      const rs = r * 0.9;
+      sk.globalAlpha = Math.max(0, Math.min(1, l.k * l.g));
+      sk.drawImage(sp, p.x / LK - rs, p.y / LK - rs, rs * 2, rs * 2);
+    }
+  }
+  // Der große Kraft-Balken oben bleibt immer hell, damit man ihn gut lesen kann
+  if (bosse.some((k) => k.balkenOben)) { lk.globalAlpha = 1; lk.fillStyle = "#fff"; lk.fillRect(116 / LK, 12 / LK, 580 / LK, 52 / LK); }
+  malen.save();
+  malen.imageSmoothingEnabled = true;
+  malen.globalCompositeOperation = "multiply";
+  malen.drawImage(lichtKarte, 0, 0, 960, 600);
+  malen.globalCompositeOperation = "screen";
+  malen.drawImage(scheinKarte, 0, 0, 960, 600);
+  malen.restore();
+}
+
 // ---- 16. Das Zimmer malen ----------------------------------------
 // Malt eine Fläche mit vielen Ecken (jede Ecke ist ein Punkt im Zimmer)
 function flaeche(ecken, farbe, rand) {
@@ -4426,6 +4533,7 @@ function allesMalen() {
     sternMalen(p.x, p.y, 5 * p.groesse, s.farbe, Math.max(0, Math.min(1, s.leben / 40)));
   }
   malen.globalAlpha = 1;
+  echtesLichtMalen();
   staubMalen();
 
   lichtMalen();
