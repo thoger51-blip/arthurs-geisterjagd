@@ -1619,20 +1619,38 @@ function tonStarten() {
   musikStarten();
 }
 // ---- 9b. Die Musik ------------------------------------------------
-// Zwei Lieder: eins für die normalen Räume, eins, sobald ein Boss da ist. Beim Wechsel wird übergeblendet.
+// Jedes Zimmer hat sein eigenes Lied (Papa hat sie gemacht!). Beim Zimmerwechsel wird übergeblendet.
 // Der ♪-Knopf oben links schaltet die Musik an und aus (das merkt sich das Tablet).
-const MUSIK = { level: "musik/level.mp3", boss: "musik/boss.mp3" };
+const MUSIK_DATEIEN = [null,
+  "L01_R01_raum", "L01_R02_endboss", "L02_R03_raum", "L02_R04_endboss", "L03_R05_raum", "L03_R06_raum", "L03_R07_endboss",
+  "L04_R08_raum", "L04_R09_endboss", "L05_R10_raum", "L05_R11_endboss", "L06_R12_raum", "L06_R13_raum", "L06_R14_raum",
+  "L06_R15_endboss", "L07_R16_raum", "L07_R17_raum", "L07_R18_endboss", "L08_R19_raum", "L08_R20_raum", "L08_R21_endboss",
+  "L09_R22_endboss", "L10_R23_endboss", "L11_R24_endboss", "L12_R25_endboss", "L13_R26_raum", "L13_R27_raum",
+  "L13_R28_endboss", "L14_R29_raum", "L14_R30_raum", "L14_R31_endboss", "L15_R32_endboss"];
+function musikDatei(name) { return "musik/" + name + ".mp3"; }
 const MUSIK_LAUT = 0.32;          // so laut ist die Musik (1 = ganz laut) – die Geräusche sollen noch gut zu hören sein
 let musikAn = true;
 try { musikAn = localStorage.getItem("geisterjagd-musik") !== "aus"; } catch (e) { /* egal */ }
-const musik = { gestartet: false, gewuenscht: "level", wechselUhr: 0, spieler: {}, laut: { level: 0, boss: 0 } };
+const musik = { gestartet: false, gewuenscht: null, wechselUhr: 0, spieler: {}, laut: {}, geladen: {}, vorladeUhr: 0 };
+
+// Lädt die Daten eines Liedes (nur einmal – danach liegen sie bereit)
+function musikLaden(name) {
+  if (!musik.geladen[name]) {
+    musik.geladen[name] = fetch(musikDatei(name)).then((antwort) => (antwort.ok ? antwort.arrayBuffer() : Promise.reject()));
+    musik.geladen[name].catch(() => { /* egal */ });
+    // Nicht zu viele Lieder im Speicher behalten
+    const namen = Object.keys(musik.geladen);
+    for (const n of namen.slice(0, Math.max(0, namen.length - 4))) if (!musik.spieler[n]) delete musik.geladen[n];
+  }
+  return musik.geladen[name];
+}
 
 function musikSpieler(name) {
   if (musik.spieler[name]) return musik.spieler[name];
   const a = new Audio();
   a.loop = true;
-  const sp = { audio: a, regler: null, bereit: false, modus: "audio", daten: null, quelle: null, wartet: 0 };
-  musik.spieler[name] = sp;
+  const sp = { audio: a, regler: null, bereit: false, modus: "audio", daten: null, quelle: null, wartet: 0, url: null };
+  musik.spieler[name] = sp; musik.laut[name] = 0;
   // Über die Lautstärke-Regler von Web Audio (so klappt das Überblenden auch auf dem iPad)
   try {
     if (ton) { sp.regler = ton.createGain(); sp.regler.gain.value = 0; sp.regler.connect(ton.destination);
@@ -1641,18 +1659,30 @@ function musikSpieler(name) {
   if (!sp.regler) a.volume = 0;
   // Klappt das Abspielen über den Audio-Spieler nicht (z. B. in der Claude-Vorschau), spielen wir das Lied direkt über Web Audio
   a.addEventListener("error", () => musikDirekt(sp));
-  fetch(MUSIK[name]).then((antwort) => (antwort.ok ? antwort.arrayBuffer() : Promise.reject()))
-    .then((daten) => { sp.daten = daten; a.src = URL.createObjectURL(new Blob([daten], { type: "audio/mpeg" })); sp.bereit = true; })
-    .catch(() => { a.src = MUSIK[name]; sp.bereit = true; });
+  musikLaden(name)
+    .then((daten) => { if (sp.weg) return; sp.daten = daten; sp.url = URL.createObjectURL(new Blob([daten], { type: "audio/mpeg" })); a.src = sp.url; sp.bereit = true; })
+    .catch(() => { if (sp.weg) return; a.src = musikDatei(name); sp.bereit = true; });
   return sp;
+}
+
+// Ein Lied, das niemand mehr hört, räumen wir weg (spart Speicher)
+function musikWegraeumen(name) {
+  const sp = musik.spieler[name];
+  if (!sp) return;
+  sp.weg = true;
+  try { sp.audio.pause(); sp.audio.removeAttribute("src"); sp.audio.load(); } catch (e) { /* egal */ }
+  try { if (sp.quelle) sp.quelle.stop(); } catch (e) { /* egal */ }
+  try { if (sp.regler) sp.regler.disconnect(); } catch (e) { /* egal */ }
+  if (sp.url) URL.revokeObjectURL(sp.url);
+  delete musik.spieler[name]; delete musik.laut[name];
 }
 
 // Plan B: das Lied in Web Audio entschlüsseln und als Endlosschleife abspielen
 function musikDirekt(sp) {
-  if (sp.modus === "direkt" || !ton || !sp.daten || !sp.regler) return;
+  if (sp.modus === "direkt" || !ton || !sp.daten || !sp.regler || sp.weg) return;
   sp.modus = "direkt";
   try { sp.audio.pause(); } catch (e) { /* egal */ }
-  ton.decodeAudioData(sp.daten.slice(0)).then((puffer) => { sp.puffer = puffer; musikDirektVonVorne(sp); }).catch(() => { /* dann ohne Musik */ });
+  ton.decodeAudioData(sp.daten.slice(0)).then((puffer) => { if (sp.weg) return; sp.puffer = puffer; musikDirektVonVorne(sp); }).catch(() => { /* dann ohne Musik */ });
 }
 function musikDirektVonVorne(sp) {
   if (!sp.puffer) return;
@@ -1666,31 +1696,28 @@ function musikDirektVonVorne(sp) {
 function musikStarten() {
   if (musik.gestartet || !ton) return;
   musik.gestartet = true;
-  musikSpieler("level");
-  setTimeout(() => musikSpieler("boss"), 4000);      // das Boss-Lied lädt etwas später nach
 }
 
 function musikBewegen() {
   if (!musik.gestartet) return;
-  // Ist gerade ein Boss da? (Ein großer Balken oben, die Krake oder Kabumm)
-  const bossDa = bosse.some((b) => (b.balkenOben || b.bandBoss) && !b.besiegt && !b.wartet) || (krake && !krake.besiegt);
-  const soll = bossDa ? "boss" : "level";
+  const soll = MUSIK_DATEIEN[zimmer] || null;
   if (soll !== musik.gewuenscht) {
     musik.wechselUhr = musik.wechselUhr + 1;
-    if (musik.wechselUhr > 40) {               // erst wechseln, wenn es wirklich so bleibt
-      musik.gewuenscht = soll; musik.wechselUhr = 0;
-      const neu = musik.spieler[soll];         // ein neuer Boss: das Lied fängt von vorne an
-      if (neu && neu.modus === "audio" && neu.audio.paused) neu.audio.currentTime = 0;
-      if (neu && neu.modus === "direkt" && musik.laut[soll] === 0) musikDirektVonVorne(neu);
+    if (musik.wechselUhr > 8 || !musik.gewuenscht) {   // kurz warten, dann überblenden
+      musik.gewuenscht = soll; musik.wechselUhr = 0; musik.vorladeUhr = 0;
     }
   } else musik.wechselUhr = 0;
-  for (const name of ["level", "boss"]) {
-    const sp = name === musik.gewuenscht ? musikSpieler(name) : musik.spieler[name];
-    if (!sp) continue;
+  // Läuft das Lied eine Weile, laden wir schon mal das Lied vom nächsten Zimmer vor
+  musik.vorladeUhr = musik.vorladeUhr + 1;
+  if (musik.vorladeUhr === 300 && MUSIK_DATEIEN[zimmer + 1]) musikLaden(MUSIK_DATEIEN[zimmer + 1]);
+  if (musik.gewuenscht && musikAn) musikSpieler(musik.gewuenscht);
+  for (const name of Object.keys(musik.spieler)) {
+    const sp = musik.spieler[name];
     const ziel = musikAn && !document.hidden && name === musik.gewuenscht ? MUSIK_LAUT : 0;
     const l = musik.laut[name];
     musik.laut[name] = ziel > l ? Math.min(ziel, l + 0.012) : Math.max(ziel, l - 0.02);
     if (sp.regler) sp.regler.gain.value = musik.laut[name]; else sp.audio.volume = musik.laut[name];
+    if (musik.laut[name] === 0 && name !== musik.gewuenscht) { musikWegraeumen(name); continue; }
     if (sp.modus !== "audio") continue;
     if (ziel > 0 && sp.bereit && sp.audio.paused) {
       sp.audio.play().catch((e) => { if (e && e.name === "NotSupportedError") musikDirekt(sp); });
