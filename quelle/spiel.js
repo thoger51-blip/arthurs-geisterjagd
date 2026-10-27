@@ -3508,6 +3508,7 @@ function lampenSammeln() {
     add(l.x, 30, l.z, "255,140,40", 470 * l.g, 0.85 + 0.12 * Math.sin(zeit * 0.31 + l.x) + 0.06 * Math.sin(zeit * 0.83 + l.x), 0.14);
   }
   if (Z.fenster) add(450, 140, 0, "130,140,230", 620, gruselZimmer ? 0.7 : 0.35, 0.06);
+  for (const f of dekoLampen) add(f.x, f.y, f.z, "255,150,60", 480, 0.8 + Math.sin(zeit * 0.37 + f.x) * 0.12, 0.14);
   if (Z.lava && !Z.wasser) {
     for (let i = 0; i < 28; i += 3) add((i * 137) % B + Math.sin(zeit * 0.02 + i) * 20, 0, (i * 89) % TIEFE, "255,120,40", 380, 0.55 + 0.15 * Math.sin(zeit * 0.05 + i * 1.7), 0.06);
   }
@@ -3578,6 +3579,315 @@ function echtesLichtMalen() {
   malen.drawImage(lichtKarte, 0, 0, 960, 600);
   malen.globalCompositeOperation = "screen";
   malen.drawImage(scheinKarte, 0, 0, 960, 600);
+  malen.restore();
+}
+
+// ---- 15e. Möbel und Deko --------------------------------------------
+// Jedes Level bekommt Sachen an die Wände und hinten an die Rückwand – passend zum Thema.
+// Alles steht nur am Rand, damit es beim Spielen nicht im Weg ist. Es wird einmal in den
+// Hintergrund gemalt und kostet beim Spielen deshalb nichts.
+const SCHWARZ = "#111014";
+// Stellt die Malfläche so ein, dass wir auf einer Wand (oder dem Boden) ganz normal malen können:
+// 1 Einheit = 1 Zimmer-Einheit, x nach rechts, y nach unten.
+function aufWand(wand, x0, y0, z0, gross) {
+  const welt = (a, b) => wand === "hinten" ? [x0 + a, y0 - b, z0]
+                     : wand === "links" ? [0, y0 - b, z0 - a]
+                     : wand === "rechts" ? [BREITE, y0 - b, z0 + a]
+                     : [x0 + a, 0, z0 + b];                      // "boden"
+  const p0 = aufsBild(...welt(0, 0)), px = aufsBild(...welt(10, 0)), py = aufsBild(...welt(0, 10));
+  malen.setTransform((px.x - p0.x) / 10, (px.y - p0.y) / 10, (py.x - p0.x) / 10, (py.y - p0.y) / 10, p0.x, p0.y);
+  if (gross) malen.scale(gross, gross);
+}
+const DEKO_GROSS = 1.6;
+function rund(x, y, w, h, r, farbe, rand) {
+  malen.beginPath(); malen.roundRect(x, y, w, h, r);
+  if (farbe) { malen.fillStyle = farbe; malen.fill(); }
+  if (rand !== 0) { malen.strokeStyle = SCHWARZ; malen.lineWidth = rand || 3; malen.stroke(); }
+}
+function kreis(x, y, r, farbe, rand) {
+  malen.beginPath(); malen.arc(x, y, r, 0, 6.28);
+  if (farbe) { malen.fillStyle = farbe; malen.fill(); }
+  if (rand !== 0) { malen.strokeStyle = SCHWARZ; malen.lineWidth = rand || 3; malen.stroke(); }
+}
+function strich(punkte, farbe, dicke) {
+  malen.beginPath(); punkte.forEach(([x, y], i) => (i ? malen.lineTo(x, y) : malen.moveTo(x, y)));
+  malen.strokeStyle = farbe || SCHWARZ; malen.lineWidth = dicke || 3; malen.lineCap = "round"; malen.lineJoin = "round"; malen.stroke();
+}
+function form(punkte, farbe, rand) {
+  malen.beginPath(); punkte.forEach(([x, y], i) => (i ? malen.lineTo(x, y) : malen.moveTo(x, y))); malen.closePath();
+  if (farbe) { malen.fillStyle = farbe; malen.fill(); }
+  if (rand !== 0) { malen.strokeStyle = SCHWARZ; malen.lineWidth = rand || 3; malen.lineJoin = "round"; malen.stroke(); }
+}
+
+// --- Sachen für die Wand (Mitte = 0,0) ---
+const WANDSACHEN = {
+  bild(motiv, w = 70, h = 56) {
+    rund(-w / 2 - 7, -h / 2 - 7, w + 14, h + 14, 4, "#8a5a2b", 3);
+    rund(-w / 2 - 7, -h / 2 - 7, w + 14, h + 14, 4, null, 3);
+    const himmel = { geist: "#22305e", mond: "#1b1640", drache: "#9fd3ff", schiff: "#7cc6f0", schaedel: "#2a2a33",
+                     blitz: "#3a3f5c", kuerbis: "#2b1d3d", berg: "#a8e0ff", karte: "#f1dfb0" }[motiv] || "#ccc";
+    rund(-w / 2, -h / 2, w, h, 2, himmel, 2);
+    malen.save(); malen.beginPath(); malen.rect(-w / 2, -h / 2, w, h); malen.clip();
+    if (motiv === "geist") {
+      form([[-12, 18], [-14, -4], [-8, -16], [8, -16], [14, -4], [12, 18], [6, 12], [0, 18], [-6, 12]], "#6fd3ff", 2);
+      kreis(-5, -6, 2.5, SCHWARZ, 0); kreis(5, -6, 2.5, SCHWARZ, 0);
+      kreis(22, -16, 6, "#fff3b0", 0);
+    } else if (motiv === "mond") {
+      kreis(10, -4, 14, "#fff3b0", 0); kreis(4, -9, 12, "#1b1640", 0);
+      for (const [x, y] of [[-22, -14], [-14, 8], [-26, 14], [24, 14]]) kreis(x, y, 1.6, "#fff", 0);
+    } else if (motiv === "drache") {
+      form([[-40, 28], [-10, -6], [10, 10], [40, -14], [40, 28]], "#5fae5a", 0);
+      kreis(-2, -6, 9, "#e04848", 2); form([[-8, -14], [-4, -24], [0, -15]], "#e04848", 2);
+      form([[4, -4], [22, -16], [16, 2]], "#9b59b6", 2);
+    } else if (motiv === "schiff") {
+      form([[-40, 14], [40, 14], [40, 30], [-40, 30]], "#2f6fb0", 0);
+      form([[-22, 8], [22, 8], [16, 18], [-16, 18]], "#8a5a2b", 2);
+      strich([[0, 8], [0, -20]], SCHWARZ, 2); form([[1, -20], [16, -4], [1, -4]], "#fff", 2);
+      form([[-1, -18], [-14, -4], [-1, -4]], "#fff", 2);
+    } else if (motiv === "schaedel") {
+      kreis(0, -2, 15, "#f2eee4", 2); rund(-8, 8, 16, 10, 3, "#f2eee4", 2);
+      kreis(-6, -3, 4, SCHWARZ, 0); kreis(6, -3, 4, SCHWARZ, 0); form([[0, 2], [-2, 6], [2, 6]], SCHWARZ, 0);
+    } else if (motiv === "blitz") {
+      form([[-8, -24], [8, -24], [0, -4], [10, -4], [-8, 24], [-2, 4], [-12, 4]], "#ffd34d", 2);
+    } else if (motiv === "kuerbis") {
+      kreis(0, 6, 16, "#ec8326", 2); strich([[0, -10], [2, -16]], "#4f6b2c", 4);
+      form([[-9, 2], [-3, 2], [-6, -4]], "#ffd34d", 0); form([[9, 2], [3, 2], [6, -4]], "#ffd34d", 0);
+      strich([[-8, 12], [-3, 15], [3, 12], [8, 15]], "#ffd34d", 2);
+    } else if (motiv === "berg") {
+      form([[-40, 28], [-12, -12], [6, 10], [18, -2], [40, 28]], "#6b8e4e", 2);
+      form([[-12, -12], [-18, -3], [-6, -3]], "#fff", 0); kreis(22, -16, 7, "#ffd34d", 0);
+    } else if (motiv === "karte") {
+      strich([[-24, 10], [-10, -4], [4, 6], [16, -10]], "#b5543a", 2); malen.setLineDash([]);
+      strich([[12, -14], [20, -6]], "#d0312d", 4); strich([[20, -14], [12, -6]], "#d0312d", 4);
+    }
+    malen.restore();
+  },
+  regal(sachen, w = 120) {
+    rund(-w / 2, 0, w, 8, 2, "#8a5a2b", 3);
+    strich([[-w / 2 + 12, 8], [-w / 2 + 12, 20]], SCHWARZ, 4); strich([[w / 2 - 12, 8], [w / 2 - 12, 20]], SCHWARZ, 4);
+    let x = -w / 2 + 8;
+    for (const s of sachen) {
+      if (s === "buecher") {
+        for (const [bw, bh, f] of [[8, 30, "#d0312d"], [7, 26, "#2f6fb0"], [9, 32, "#3c9a5f"], [7, 24, "#ffd34d"]]) { rund(x, -bh, bw, bh, 1, f, 2); x += bw + 1; }
+        x += 6;
+      } else if (s === "glas") { rund(x, -22, 16, 22, 4, "rgba(170, 230, 255, 0.7)", 2); kreis(x + 8, -9, 4, "#9b59b6", 0); x += 22; }
+      else if (s === "trank") { kreis(x + 8, -9, 9, "#5fd38a", 2); rund(x + 5, -26, 6, 9, 1, "#5fd38a", 2); x += 22; }
+      else if (s === "schaedel") { kreis(x + 10, -12, 10, "#f2eee4", 2); kreis(x + 6, -13, 2.6, SCHWARZ, 0); kreis(x + 14, -13, 2.6, SCHWARZ, 0); x += 24; }
+      else if (s === "teddy") { kreis(x + 10, -10, 9, "#b07a45", 2); kreis(x + 10, -24, 7, "#b07a45", 2); kreis(x + 5, -30, 3, "#b07a45", 2); kreis(x + 15, -30, 3, "#b07a45", 2); x += 24; }
+      else if (s === "ball") { kreis(x + 10, -10, 10, "#ff69b4", 2); strich([[x + 1, -10], [x + 19, -10]], "#fff", 2); x += 24; }
+      else if (s === "kugel") { kreis(x + 10, -10, 10, "#3d3a44", 2); x += 22; }
+      else if (s === "flasche") { rund(x + 3, -22, 12, 22, 3, "#3c9a5f", 2); rund(x + 6, -32, 6, 10, 1, "#3c9a5f", 2); x += 20; }
+    }
+  },
+  uhr() {
+    kreis(0, 0, 24, "#f7efe0", 4); kreis(0, 0, 3, SCHWARZ, 0);
+    for (let i = 0; i < 12; i++) { const w = i * Math.PI / 6; strich([[Math.cos(w) * 18, Math.sin(w) * 18], [Math.cos(w) * 21, Math.sin(w) * 21]], SCHWARZ, 2); }
+    strich([[0, 0], [0, -14]], SCHWARZ, 3); strich([[0, 0], [10, 4]], SCHWARZ, 3);
+  },
+  girlande(w = 260) {
+    strich([[-w / 2, 0], [0, 14], [w / 2, 0]], SCHWARZ, 2);
+    const farben = ["#ffd34d", "#6fd3ff", "#ff69b4", "#5fd38a"];
+    for (let i = 0; i < 9; i++) {
+      const t = (i + 0.5) / 9, x = -w / 2 + t * w, y = (t < 0.5 ? t : 1 - t) * 28;
+      form([[x - 9, y], [x + 9, y + (t < 0.5 ? 1 : -1)], [x, y + 18]], farben[i % 4], 2);
+    }
+  },
+  wappen() {
+    strich([[-30, 26], [30, -30]], "#c9ccd4", 6); strich([[30, 26], [-30, -30]], "#c9ccd4", 6);
+    strich([[-30, 26], [30, -30]], SCHWARZ, 1.5); strich([[30, 26], [-30, -30]], SCHWARZ, 1.5);
+    form([[-20, -22], [20, -22], [20, 2], [0, 26], [-20, 2]], "#d0312d", 3);
+    form([[-20, -22], [0, -22], [0, 26], [-20, 2]], "#2f6fb0", 0); form([[-20, -22], [20, -22], [20, 2], [0, 26], [-20, 2]], null, 3);
+    kreis(0, -2, 6, "#ffd34d", 2);
+  },
+  fahne(farbe = "#d0312d") {
+    strich([[-26, -40], [26, -40]], "#8a5a2b", 5);
+    form([[-20, -40], [20, -40], [20, 30], [0, 18], [-20, 30]], farbe, 3);
+    kreis(0, -10, 8, "#ffd34d", 2);
+  },
+  fackel() {
+    rund(-4, -6, 8, 30, 2, "#6b4423", 2);
+    form([[-9, -6], [9, -6], [6, 2], [-6, 2]], "#555", 2);
+    form([[-8, -8], [0, -34], [8, -8]], "#ff9a2e", 0); form([[-4, -8], [0, -24], [4, -8]], "#ffe066", 0);
+  },
+  anker() {
+    kreis(0, -30, 7, null, 4);
+    strich([[0, -23], [0, 26]], SCHWARZ, 6); strich([[-14, -14], [14, -14]], SCHWARZ, 6);
+    malen.beginPath(); malen.arc(0, 8, 22, 0.15, Math.PI - 0.15); malen.strokeStyle = SCHWARZ; malen.lineWidth = 6; malen.stroke();
+    strich([[0, -23], [0, 26]], "#8b95a3", 3); strich([[-14, -14], [14, -14]], "#8b95a3", 3);
+    malen.beginPath(); malen.arc(0, 8, 22, 0.15, Math.PI - 0.15); malen.strokeStyle = "#8b95a3"; malen.lineWidth = 3; malen.stroke();
+  },
+  steuerrad() {
+    for (let i = 0; i < 8; i++) { const w = i * Math.PI / 4; strich([[0, 0], [Math.cos(w) * 34, Math.sin(w) * 34]], SCHWARZ, 7); strich([[0, 0], [Math.cos(w) * 33, Math.sin(w) * 33]], "#a8743f", 4); }
+    kreis(0, 0, 24, null, 9); kreis(0, 0, 24, null, 0);
+    malen.beginPath(); malen.arc(0, 0, 24, 0, 6.28); malen.strokeStyle = "#a8743f"; malen.lineWidth = 5; malen.stroke();
+    kreis(0, 0, 7, "#a8743f", 3);
+  },
+  rettungsring() {
+    kreis(0, 0, 24, "#fff", 4); kreis(0, 0, 11, "#2b1030", 3);
+    for (const w of [0.4, 2.0, 3.6, 5.2]) { malen.beginPath(); malen.arc(0, 0, 17.5, w, w + 0.7); malen.strokeStyle = "#d0312d"; malen.lineWidth = 10; malen.stroke(); }
+  },
+  knochen() {
+    for (const s of [1, -1]) {
+      strich([[-26 * s, -18], [26 * s, 18]], SCHWARZ, 9); strich([[-26 * s, -18], [26 * s, 18]], "#f2eee4", 5);
+      for (const [x, y] of [[-26 * s, -18], [26 * s, 18]]) { kreis(x - 4, y, 5, "#f2eee4", 2); kreis(x + 4, y, 5, "#f2eee4", 2); }
+    }
+    kreis(0, -4, 15, "#f2eee4", 3); rund(-8, 6, 16, 9, 3, "#f2eee4", 2);
+    kreis(-5, -5, 4, SCHWARZ, 0); kreis(5, -5, 4, SCHWARZ, 0);
+  },
+  warnschild() {
+    form([[0, -26], [26, 20], [-26, 20]], "#ffd34d", 4);
+    rund(-3, -10, 6, 18, 2, SCHWARZ, 0); kreis(0, 13, 3, SCHWARZ, 0);
+  },
+};
+
+// --- Sachen, die hinten auf dem Boden stehen (unten in der Mitte = 0,0) ---
+const BODENSACHEN = {
+  fass() {
+    rund(-20, -46, 40, 46, 10, "#9a6435", 3);
+    strich([[-19, -36], [19, -36]], SCHWARZ, 3); strich([[-19, -10], [19, -10]], SCHWARZ, 3);
+    strich([[-8, -45], [-8, -1]], "rgba(0,0,0,0.25)", 2); strich([[8, -45], [8, -1]], "rgba(0,0,0,0.25)", 2);
+  },
+  kiste(text) {
+    rund(-26, -46, 52, 46, 2, "#c08a4a", 3);
+    strich([[-24, -44], [24, -2]], "#8a5a2b", 4); strich([[-26, -24], [26, -24]], SCHWARZ, 2);
+    if (text) { malen.fillStyle = "#d0312d"; malen.font = "800 13px 'Baloo 2', sans-serif"; malen.textAlign = "center"; malen.fillText(text, 0, -28); }
+  },
+  pflanze() {
+    form([[-14, -26], [14, -26], [10, 0], [-10, 0]], "#c4602d", 3);
+    for (const [x, y, w] of [[-14, -50, -0.5], [0, -60, 0], [14, -50, 0.5], [-6, -44, -0.2], [8, -46, 0.3]]) {
+      malen.save(); malen.translate(0, -26); malen.rotate(w);
+      malen.beginPath(); malen.ellipse(0, (y + 26) / 2, 7, Math.abs(y + 26) / 2, 0, 0, 6.28);
+      malen.fillStyle = "#3c9a5f"; malen.fill(); malen.strokeStyle = SCHWARZ; malen.lineWidth = 2.5; malen.stroke(); malen.restore();
+    }
+  },
+  buecherstapel() {
+    rund(-22, -10, 44, 10, 2, "#2f6fb0", 2.5); rund(-18, -20, 38, 10, 2, "#d0312d", 2.5); rund(-20, -30, 40, 10, 2, "#3c9a5f", 2.5);
+  },
+  kugeln() {
+    for (const [x, y] of [[-20, -10], [0, -10], [20, -10], [-10, -27], [10, -27], [0, -44]]) kreis(x, y, 10, "#3d3a44", 2.5);
+  },
+  knochenhaufen() {
+    for (const [x, y, w] of [[-14, -6, 0.3], [10, -6, -0.4], [0, -14, 0.1]]) {
+      malen.save(); malen.translate(x, y); malen.rotate(w);
+      strich([[-14, 0], [14, 0]], SCHWARZ, 8); strich([[-14, 0], [14, 0]], "#f2eee4", 4);
+      for (const ex of [-14, 14]) { kreis(ex, -3, 4, "#f2eee4", 2); kreis(ex, 3, 4, "#f2eee4", 2); }
+      malen.restore();
+    }
+    kreis(0, -30, 12, "#f2eee4", 2.5); kreis(-4, -31, 3, SCHWARZ, 0); kreis(4, -31, 3, SCHWARZ, 0);
+  },
+  grabstein() {
+    malen.beginPath(); malen.moveTo(-22, 0); malen.lineTo(-22, -36); malen.arc(0, -36, 22, Math.PI, 0); malen.lineTo(22, 0); malen.closePath();
+    malen.fillStyle = "#8b8f99"; malen.fill(); malen.strokeStyle = SCHWARZ; malen.lineWidth = 3; malen.stroke();
+    malen.fillStyle = SCHWARZ; malen.font = "800 13px 'Baloo 2', sans-serif"; malen.textAlign = "center"; malen.fillText("BUH!", 0, -26);
+  },
+  kuerbischen() {
+    kreis(-10, -12, 12, "#ec8326", 2.5); kreis(10, -12, 12, "#ec8326", 2.5); kreis(0, -13, 13, "#f39a3c", 2.5);
+    strich([[0, -25], [2, -32]], "#4f6b2c", 4);
+  },
+  tnt() {
+    for (const x of [-14, 0, 14]) rund(x - 6, -40, 12, 40, 2, "#d0312d", 2.5);
+    rund(-22, -26, 44, 10, 2, "#ffd34d", 2.5);
+    malen.fillStyle = SCHWARZ; malen.font = "800 9px 'Baloo 2', sans-serif"; malen.textAlign = "center"; malen.fillText("BUMM", 0, -18);
+    strich([[0, -40], [4, -50]], SCHWARZ, 2);
+  },
+};
+
+// Welche Sachen in welchem Level? (w = Wandsachen, b = Bodensachen)
+const DEKO_THEMEN = {
+  kinder:     { w: [["bild", "geist"], ["regal", ["buecher", "teddy", "ball"]], ["uhr"], ["bild", "mond"], ["girlande"]], b: ["pflanze", "buecherstapel"] },
+  buecher:    { w: [["regal", ["buecher", "glas", "buecher"]], ["bild", "berg"], ["uhr"], ["regal", ["trank", "buecher", "glas"]]], b: ["buecherstapel", "pflanze"] },
+  schatz:     { w: [["bild", "schiff"], ["regal", ["glas", "flasche", "trank"]], ["wappen"], ["uhr"]], b: ["fass", "kiste"] },
+  burg:       { w: [["fackel"], ["wappen"], ["fahne", "#d0312d"], ["fackel"], ["bild", "drache"]], b: ["fass", "kugeln"] },
+  donner:     { w: [["bild", "blitz"], ["uhr"], ["regal", ["glas", "buecher"]], ["bild", "mond"]], b: ["pflanze", "fass"] },
+  drache:     { w: [["fackel"], ["wappen"], ["fahne", "#2f6fb0"], ["bild", "drache"], ["fackel"]], b: ["fass", "kiste"] },
+  piraten:    { w: [["steuerrad"], ["anker"], ["bild", "karte"], ["rettungsring"], ["bild", "schiff"]], b: ["fass", "kugeln", "kiste"] },
+  kuerbis:    { w: [["bild", "kuerbis"], ["regal", ["glas", "trank", "schaedel"]], ["bild", "mond"]], b: ["kuerbischen", "fass"] },
+  knochen:    { w: [["knochen"], ["regal", ["schaedel", "trank", "schaedel"]], ["bild", "schaedel"], ["knochen"]], b: ["knochenhaufen", "grabstein"] },
+  bombe:      { w: [["warnschild"], ["regal", ["kugel", "kugel", "flasche"]], ["warnschild"]], b: ["tnt", "kiste"] },
+};
+function dekoThema(z) {
+  if (z === 28 || z === 29) return "kuerbis";
+  if (z === 30 || z === 32) return "knochen";
+  if (z === 31) return "bombe";
+  const L = ZIMMER[z].level;
+  return L <= 2 ? "kinder" : L <= 4 ? "buecher" : L === 5 ? "schatz" : L <= 7 ? "burg" : L === 8 ? "donner"
+       : L <= 10 ? "drache" : "piraten";
+}
+
+// Sucht freie Plätze an der Rückwand: nicht vor Türen, Fenster, Kerzen und Kürbissen
+function freiAnDerRueckwand(breite, belegt) {
+  const plaetze = [];
+  for (const x of [120, 250, 650, 780, 330, 570, 450, 190, 710]) {
+    if (x - breite / 2 < 30 || x + breite / 2 > BREITE - 30) continue;
+    if (belegt.some(([a, b]) => x + breite / 2 > a && x - breite / 2 < b)) continue;
+    plaetze.push(x); belegt.push([x - breite / 2 - 15, x + breite / 2 + 15]);
+    return x;
+  }
+  return null;
+}
+let dekoLampen = [];
+function dekoMalen() {
+  dekoLampen = [];
+  const Z = ZIMMER[zimmer];
+  const thema = DEKO_THEMEN[dekoThema(zimmer)];
+  if (!thema) return;
+  malen.save();
+  // Ein runder Teppich in normalen Zimmern (flach auf dem Boden – stört beim Spielen nicht)
+  const teppichFarbe = { kinder: ["#6fd3ff", "#ffd34d"], buecher: ["#3c9a5f", "#f1dfb0"], schatz: ["#c2185b", "#ffd34d"],
+                         burg: ["#d0312d", "#ffd34d"], donner: ["#2f6fb0", "#c9ccd4"], drache: ["#2f6fb0", "#ffd34d"],
+                         piraten: ["#2f6fb0", "#f2eee4"] }[dekoThema(zimmer)];
+  if (teppichFarbe && !gruselZimmer && !Z.teppich && !Z.lava && !Z.wasser && !Z.band && !becken.length) {
+    aufWand("boden", 450, 0, 330);
+    malen.globalAlpha = 0.55;
+    for (const [rx, rz, f] of [[230, 125, teppichFarbe[0]], [205, 106, teppichFarbe[1]], [180, 88, teppichFarbe[0]]]) {
+      malen.beginPath(); malen.ellipse(0, 0, rx, rz, 0, 0, 6.28); malen.fillStyle = f; malen.fill();
+    }
+    malen.globalAlpha = 1;
+    malen.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  // Was an der Rückwand schon da ist
+  const wandBelegt = [], bodenBelegt = [];
+  if (Z.tuerHinten) { wandBelegt.push([Z.tuerHinten.von - 20, Z.tuerHinten.bis + 20]); bodenBelegt.push([Z.tuerHinten.von - 30, Z.tuerHinten.bis + 30]); }
+  if (Z.fenster) wandBelegt.push([330, 570]);
+  if (Z.kerzen) { wandBelegt.push([135, 205]); wandBelegt.push([695, 765]); }
+  if (gruselZimmer && !Z.lava) bodenBelegt.push([10, 210], [770, 890]);
+  if (Z.lava || Z.wasser || Z.band) bodenBelegt.push([0, BREITE]);         // dort steht hinten nichts auf dem Boden
+  // 1. Wandsachen: zuerst auf die Rückwand, der Rest an die Seitenwände
+  const seitenPlaetze = [["links", 130], ["rechts", 130], ["links", 450], ["rechts", 450]];
+  let seite = 0;
+  for (const [art, a, b] of thema.w) {
+    if (art === "girlande" && bosse.some((k) => k.balkenOben)) continue;     // nicht hinter den Kraft-Balken
+    const breite = (art === "regal" ? 130 : art === "girlande" ? 270 : 84) * (art === "girlande" ? 1 : DEKO_GROSS);
+    const hoehe = art === "girlande" ? 232 : art === "regal" ? 112 : art === "fackel" ? 118 : 140;
+    let x = freiAnDerRueckwand(breite, wandBelegt);
+    if (x !== null) aufWand("hinten", x, hoehe, 0, art === "girlande" ? 1 : DEKO_GROSS);
+    else {
+      // Seitenwand – aber nicht über einer Tür und nicht an einer Kanone
+      let platz = null;
+      while (seite < seitenPlaetze.length && !platz) {
+        const [w, z] = seitenPlaetze[seite++];
+        const tuer = (w === "links" ? Z.tuerLinks : Z.tuerRechts) && z + 60 > TUER.von && z - 60 < TUER.bis;
+        const kanone = kanonen.some((k) => k.seite === w && Math.abs(k.z - z) < 90);
+        if (!tuer && !kanone && art !== "girlande") platz = [w, z];
+      }
+      if (!platz) continue;
+      aufWand(platz[0], 0, hoehe, platz[1], DEKO_GROSS);
+      x = platz[0] === "links" ? 0 : BREITE;
+      if (art === "fackel") dekoLampen.push({ x, y: hoehe + 40, z: platz[1] });
+      WANDSACHEN[art](a, b);
+      continue;
+    }
+    if (art === "fackel") dekoLampen.push({ x, y: hoehe + 40, z: 0 });
+    WANDSACHEN[art](a, b);
+  }
+  // 2. Bodensachen hinten an der Rückwand
+  for (const art of thema.b) {
+    const x = freiAnDerRueckwand(70 * DEKO_GROSS, bodenBelegt);
+    if (x === null) continue;
+    aufWand("hinten", x, 0, 12, DEKO_GROSS);
+    malen.fillStyle = "rgba(40, 0, 30, 0.25)"; malen.beginPath(); malen.ellipse(0, 0, 30, 5, 0, 0, 6.28); malen.fill();
+    BODENSACHEN[art]();
+  }
   malen.restore();
 }
 
@@ -3660,6 +3970,7 @@ function hintergrundBauen() {
     spinnwebeMalen(l.x, l.y, 84); spinnwebeMalen(r.x, r.y, 84);
     malen.restore();
   }
+  dekoMalen();
   malen = echt;
   hintergrund = { zimmer, bild: c };
 }
