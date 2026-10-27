@@ -139,6 +139,33 @@ const AUGEN = {
   krakeGross: { augen: [[0.392, 0.60, 0.07, 0.067], [0.608, 0.60, 0.07, 0.067]], strich: "#111014", unten: true, rand: 1.35 },
   kabumm:     { augen: [[0.391, 0.512, 0.078, 0.06], [0.609, 0.512, 0.078, 0.06]], strich: "#111014", unten: true, rand: 1.3 },
 };
+// Kann dieses Gerät Bilder weichzeichnen? (Ältere iPads können das nicht – dann eben ohne)
+const WEICH_GEHT = (() => { try { const m = document.createElement("canvas").getContext("2d"); m.filter = "blur(2px)"; return m.filter === "blur(2px)"; } catch (e) { return false; } })();
+// Eine weichgezeichnete, helle Kopie eines Bildes – die legen wir als Überstrahlen über leuchtende Figuren
+function leuchtBild(b) {
+  if (b.leucht !== undefined) return b.leucht;
+  b.leucht = null;
+  if (!WEICH_GEHT || !b.width) return null;
+  const rand = Math.round(b.height * 0.12);
+  const c = document.createElement("canvas"); c.width = b.width + rand * 2; c.height = b.height + rand * 2;
+  const m = c.getContext("2d");
+  m.filter = "blur(" + Math.round(b.height * 0.045) + "px) brightness(1.3)";
+  m.drawImage(b, rand, rand);
+  b.leucht = { bild: c, rand };
+  return b.leucht;
+}
+// Malt das Überstrahlen über ein Bild, das auf den Füßen steht
+function ueberstrahlen(b, x, y, hoehe, staerke) {
+  const L = leuchtBild(b);
+  if (!L) return;
+  const s = hoehe / b.height;
+  malen.save();
+  malen.globalCompositeOperation = "lighter";
+  malen.globalAlpha = staerke;
+  malen.drawImage(L.bild, x - (b.width / 2 + L.rand) * s, y - (b.height + L.rand) * s, L.bild.width * s, L.bild.height * s);
+  malen.restore();
+}
+
 function augenZuMachen() {
   for (const name of Object.keys(AUGEN)) {
     const b = bild[name];
@@ -3571,6 +3598,13 @@ function echtesLichtMalen() {
       sk.drawImage(sp, p.x / LK - rs, p.y / LK - rs, rs * 2, rs * 2);
     }
   }
+  // Dunst: ganz hinten wird alles ein bisschen heller und blasser – wie Luft, durch die man weit schaut
+  const yHinten = aufsBild(0, 0, 0).y / LK, yMitte = aufsBild(0, 0, 260).y / LK, yOben = aufsBild(0, WANDHOEHE, 0).y / LK;
+  const dunst = sk.createLinearGradient(0, yOben, 0, yMitte);
+  const df = gruselZimmer ? "150, 120, 210" : "255, 220, 245";
+  dunst.addColorStop(0, "rgba(" + df + ", 0.10)"); dunst.addColorStop((yHinten - yOben) / (yMitte - yOben), "rgba(" + df + ", 0.13)");
+  dunst.addColorStop(1, "rgba(" + df + ", 0)");
+  sk.globalAlpha = 1; sk.fillStyle = dunst; sk.fillRect(0, yOben, 960 / LK, yMitte - yOben);
   // Der große Kraft-Balken oben bleibt immer hell, damit man ihn gut lesen kann
   if (bosse.some((k) => k.balkenOben)) { lk.globalAlpha = 1; lk.fillStyle = "#fff"; lk.fillRect(116 / LK, 12 / LK, 580 / LK, 52 / LK); }
   malen.save();
@@ -3971,6 +4005,17 @@ function hintergrundBauen() {
     malen.restore();
   }
   dekoMalen();
+  if (WEICH_GEHT) {        // Tiefe: die Rückwand und was hinten steht ist ein kleines bisschen unscharf
+    const kopie = document.createElement("canvas"); kopie.width = 960; kopie.height = 600;
+    kopie.getContext("2d").drawImage(c, 0, 0);
+    malen.save();
+    malen.beginPath();
+    [[0, 0, 0], [B, 0, 0], [B, H, 0], [0, H, 0]].forEach(([x, y, z], i) => { const q = aufsBild(x, y, z); if (i) malen.lineTo(q.x, q.y); else malen.moveTo(q.x, q.y); });
+    malen.closePath(); malen.clip();
+    malen.filter = "blur(1.3px)";
+    malen.drawImage(kopie, 0, 0);
+    malen.restore();
+  }
   malen = echt;
   hintergrund = { zimmer, bild: c };
 }
@@ -4335,6 +4380,7 @@ function geistMalen(g) {
   const p = aufsBild(g.x + zittern, schweben, g.z);
   malen.globalAlpha = 0.92;                             // Geister sind ein bisschen durchsichtig
   lebendigMalen(bild.geist, p.x, p.y, groesse * p.groesse, g.dx < 0, phaseVon(g), g.zappeln ? 0 : 1);
+  ueberstrahlen(bild.geist, p.x, p.y, groesse * p.groesse, 0.22);
   malen.globalAlpha = 1;
   if (g.jagtGerade && ZIMMER[zimmer].geisterBeissen) jagdZeichenMalen(g.x, schweben + groesse + 14, g.z);
 }
@@ -4433,6 +4479,8 @@ function bossMalen(k) {
   }
   if (k.platt) { malen.restore(); k.platt = false; }
   malen.filter = "none";
+  // Geister-Bosse leuchten und strahlen etwas über
+  if (kipp === 0 && b === bild.koenig && !(k.besiegt && k.wirdZuGeld)) ueberstrahlen(b, p.x, p.y, groesse * p.groesse, 0.2);
   malen.globalAlpha = 1;
   // Das Ausrufezeichen: Er jagt gerade, er blinkt – oder er fängt gleich an zu blinken
   const gleichBlinken = k.blinkt && !k.blinktGerade && k.blinkUhr < 45;
