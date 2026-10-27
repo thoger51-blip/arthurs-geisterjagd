@@ -108,6 +108,10 @@ const BILDER = {
   kuerbis:      "__kuerbis__",        // der böse Kürbis (Level 13)
   skelett:      "__skelett__",        // das Skelett (Level 14)
   kabumm:       "__kabumm__",         // Kabumm, die lebendige Bombe (Level 14)
+  // Das Männchen in Teilen: Körper ohne Arme, und die Arme einzeln – damit sie beim Laufen schwingen
+  koerperVorne: "__koerper_down__", koerperHinten: "__koerper_up__", koerperSeite: "__koerper_side__",
+  armVorneL: "__arm_down_L__", armVorneR: "__arm_down_R__", armHintenL: "__arm_up_L__", armHintenR: "__arm_up_R__",
+  armSeite: "__arm_side_V__",
 };
 
 // Hier laden wir alle Bilder. Erst wenn alle fertig sind, geht's los.
@@ -117,10 +121,63 @@ function ladeBilder(fertig) {
   let geladen = 0;
   for (const name of namen) {
     const b = new Image();
-    b.onload = () => { geladen = geladen + 1; if (geladen === namen.length) fertig(); };
+    b.onload = () => { geladen = geladen + 1; if (geladen === namen.length) { augenZuMachen(); fertig(); } };
     b.src = BILDER[name];
     bild[name] = b;
   }
+}
+
+
+// ---- 1b. Lebendige Figuren: blinzeln, atmen, wackeln ---------------------
+// Für jede Figur mit Augen malen wir einmal eine Version mit geschlossenen Augen.
+// Wo die Augen sitzen: [x, y, Breite, Höhe] als Anteil vom Bild.
+const AUGEN = {
+  geist:      { augen: [[0.30, 0.235, 0.11, 0.07], [0.70, 0.235, 0.11, 0.07]], strich: "#0b4f8a", rand: 1.2 },
+  koenig:     { augen: [[0.369, 0.391, 0.058, 0.047], [0.721, 0.389, 0.052, 0.045]], strich: "#0b3a66", rand: 1.3 },
+  drache:     { augen: [[0.392, 0.202, 0.049, 0.048], [0.562, 0.202, 0.049, 0.048]], strich: "#111014", rand: 1.45 },
+  krake:      { augen: [[0.393, 0.606, 0.071, 0.071]], strich: "#111014", unten: true, rand: 1.35 },
+  krakeGross: { augen: [[0.392, 0.60, 0.07, 0.067], [0.608, 0.60, 0.07, 0.067]], strich: "#111014", unten: true, rand: 1.35 },
+  kabumm:     { augen: [[0.391, 0.512, 0.078, 0.06], [0.609, 0.512, 0.078, 0.06]], strich: "#111014", unten: true, rand: 1.3 },
+};
+function augenZuMachen() {
+  for (const name of Object.keys(AUGEN)) {
+    const b = bild[name];
+    if (!b || !b.width) continue;
+    try {
+      const c = document.createElement("canvas"); c.width = b.width; c.height = b.height;
+      const m = c.getContext("2d");
+      m.drawImage(b, 0, 0);
+      for (const [ax, ay, aw, ah] of AUGEN[name].augen) {
+        const cx = ax * b.width, cy = ay * b.height, rx = aw * b.width, ry = ah * b.height;
+        // Die Lid-Farbe holen wir uns knapp über dem Auge
+        const d = m.getImageData(Math.round(cx - 2), Math.round(AUGEN[name].unten ? cy + ry * 1.9 : Math.max(0, cy - ry * 1.8)), 5, 5).data;
+        let rr = 0, gg = 0, bb = 0, n = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 100) { rr += d[i]; gg += d[i + 1]; bb += d[i + 2]; n++; }
+        if (!n) continue;
+        m.fillStyle = "rgb(" + Math.round(rr / n) + "," + Math.round(gg / n) + "," + Math.round(bb / n) + ")";
+        m.beginPath(); m.ellipse(cx, cy, rx * AUGEN[name].rand, ry * AUGEN[name].rand * 1.04, 0, 0, 6.28); m.fill();
+        m.strokeStyle = AUGEN[name].strich; m.lineWidth = Math.max(2, ry * 0.32); m.lineCap = "round";
+        m.beginPath(); m.moveTo(cx - rx * 0.95, cy); m.quadraticCurveTo(cx, cy + ry * 0.55, cx + rx * 0.95, cy); m.stroke();
+      }
+      b.zu = c;
+    } catch (e) { /* dann blinzelt diese Figur eben nicht */ }
+  }
+}
+// Blinzelt die Figur gerade? Jede Figur hat ihren eigenen Takt (ph), damit nicht alle gleichzeitig blinzeln.
+function blinzelt(ph) { return (zeit + Math.floor(ph * 997)) % (200 + Math.floor(ph * 140)) < 7; }
+function phaseVon(ding) { if (ding.ph === undefined) ding.ph = Math.random(); return ding.ph; }
+
+// Malt ein Bild auf den Füßen – aber lebendig: es atmet (wird ein bisschen breit und schmal) und wackelt leicht
+function lebendigMalen(b, x, y, hoehe, spiegeln, ph, staerke) {
+  if (b.zu && blinzelt(ph)) b = b.zu;
+  const atem = Math.sin(zeit * 0.07 + ph * 6.28) * 0.028 * staerke;
+  const wackeln = Math.sin(zeit * 0.045 + ph * 6.28) * 0.035 * staerke;
+  malen.save();
+  malen.translate(x, y);
+  malen.rotate(wackeln);
+  malen.scale(1 + atem, 1 - atem);
+  bildMalenAufFuessen(b, 0, 0, hoehe, spiegeln);
+  malen.restore();
 }
 
 // ---- 2. Das Zimmer und die Kamera ------------------------------------
@@ -275,6 +332,16 @@ const maennchen = {
 let sprungWunsch = false; // wurde gerade der Spring-Knopf gedrückt?
 
 // Wo fangen bei jedem Bild die Beine an? (0 = ganz oben, 1 = ganz unten)
+
+// Wo die Arme im Bild sitzen (Anteile vom Bild) und wo die Schulter ist, um die sie sich drehen
+const ARME = {
+  vorne:  [{ bild: "armVorneL", aussen: 1, x: 0.0, y: 0.5727, b: 0.2214, h: 0.1955, dx: 0.1069, dy: 0.5909 },
+           { bild: "armVorneR", aussen: -1, x: 0.7710, y: 0.5591, b: 0.2290, h: 0.1955, dx: 0.8689, dy: 0.5773 }],
+  hinten: [{ bild: "armHintenL", aussen: 1, x: 0.0, y: 0.5409, b: 0.2292, h: 0.2091, dx: 0.0890, dy: 0.5591 },
+           { bild: "armHintenR", aussen: -1, x: 0.7604, y: 0.5455, b: 0.2396, h: 0.2091, dx: 0.8937, dy: 0.5636 }],
+  seite:  [{ bild: "armSeite", aussen: 0, x: 0.3165, y: 0.5545, b: 0.4051, h: 0.2273, dx: 0.4644, dy: 0.5727 }],
+};
+const KOERPER = { vorne: "koerperVorne", hinten: "koerperHinten", seite: "koerperSeite" };
 const BEINE = {
   vorne:  { ab: 0.75, links: 0.25, rechts: 0.75 },
   hinten: { ab: 0.72, links: 0.18, rechts: 0.80 },
@@ -1303,7 +1370,9 @@ function krakeMalen() {
   malen.beginPath(); malen.rect(0, 0, 960, p.y + 4); malen.clip();
   if (K.getroffen > 0) malen.filter = zeit % 6 < 3 ? "brightness(0.35)" : "none";   // voller Tinte!
   const zittern = K.zustand === "zielt" ? zufall(-2, 2) : 0;
-  malen.drawImage(b, p.x - w / 2 + zittern, unten - h, w, h);
+  const atem = Math.sin(zeit * 0.07 + phaseVon(K) * 6.28) * 0.03;
+  malen.translate(p.x + zittern, unten); malen.scale(1 + atem, 1 - atem);
+  malen.drawImage(b.zu && blinzelt(phaseVon(K)) && K.getroffen <= 0 ? b.zu : b, -w / 2, -h, w, h);
   malen.restore();
   // die Wasserlinie davor
   malen.strokeStyle = "rgba(255,255,255,0.7)"; malen.lineWidth = 4;
@@ -3884,11 +3953,31 @@ function maennchenMalen() {
   malen.translate(0, huepfen);
   malen.rotate(neigen);
   malen.scale(1, atmen);
+  malen.save();
   malen.beginPath();
   malen.rect(-w / 2 - 2, -h - 2, w + 4, h + 4);
   malen.rect((links - bw / 2) * s, -h + (beinOben + bh * 0.03) * s, (rechts - links) * s, h);  // Loch für die Beine
   malen.clip("evenodd");
-  malen.drawImage(b, -w / 2, -h, w, h);
+  const koerper = bild[KOERPER[maennchen.blickt]];
+  malen.drawImage(koerper || b, -w / 2, -h, w, h);
+  malen.restore();
+  // Die Arme: beim Laufen schwingen sie gegen die Beine, im Stehen wiegen sie leise, beim Springen gehen sie hoch
+  if (koerper) {
+    const inDerLuft = Math.min(1, maennchen.hoehe / 50);
+    const schwung = (maennchen.hatSauger ? 0.65 : 1) * stark;
+    for (const arm of ARME[maennchen.blickt]) {
+      const ab = bild[arm.bild];
+      if (!ab) continue;
+      let winkel;
+      if (arm.aussen === 0) winkel = -takt * 0.5 * schwung - inDerLuft * 0.9 + Math.sin(zeit * 0.06) * 0.03;
+      else winkel = arm.aussen * (takt * 0.16 * schwung * (arm.aussen > 0 ? 1 : -1) + inDerLuft * 0.7 + 0.04 + Math.sin(zeit * 0.06) * 0.03);
+      malen.save();
+      malen.translate(-w / 2 + arm.dx * w, -h + arm.dy * h);
+      malen.rotate(winkel);
+      malen.drawImage(ab, (arm.x - arm.dx) * w, (arm.y - arm.dy) * h, arm.b * w, arm.h * h);
+      malen.restore();
+    }
+  }
   malen.restore();
 
   malen.restore();
@@ -3934,7 +4023,7 @@ function geistMalen(g) {
   schattenMalen(g.x, g.z, groesse * 0.35, 0.2);
   const p = aufsBild(g.x + zittern, schweben, g.z);
   malen.globalAlpha = 0.92;                             // Geister sind ein bisschen durchsichtig
-  bildMalenAufFuessen(bild.geist, p.x, p.y, groesse * p.groesse, g.dx < 0);
+  lebendigMalen(bild.geist, p.x, p.y, groesse * p.groesse, g.dx < 0, phaseVon(g), g.zappeln ? 0 : 1);
   malen.globalAlpha = 1;
   if (g.jagtGerade && ZIMMER[zimmer].geisterBeissen) jagdZeichenMalen(g.x, schweben + groesse + 14, g.z);
 }
@@ -4028,7 +4117,8 @@ function bossMalen(k) {
     malen.restore();
   } else {
     // Geister schauen dahin, wo sie hinschweben – die Truhe schaut immer zum Männchen
-    bildMalenAufFuessen(b, p.x, p.y, groesse * p.groesse, k.truhe ? maennchen.x < k.x : k.drache ? maennchen.x > k.x : k.dx < 0);
+    lebendigMalen(b, p.x, p.y, groesse * p.groesse, k.truhe ? maennchen.x < k.x : k.drache ? maennchen.x > k.x : k.dx < 0,
+                  phaseVon(k), k.truhe || k.zappeln || k.besiegt ? 0 : k.kuerbis ? 0.6 : 1);
   }
   if (k.platt) { malen.restore(); k.platt = false; }
   malen.filter = "none";
