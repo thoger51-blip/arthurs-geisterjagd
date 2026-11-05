@@ -31,7 +31,9 @@
 //  Level 14: Zimmer 29 – der Kürbis zum Draufspringen
 //            Zimmer 30 – das Skelett und das Figuren-Rätsel
 //            Zimmer 31 – Kabumm auf dem Laufband (Bomben werfen!)
-//  Level 15: Zimmer 32 – das große Skelett (mehr Leben) und das Figuren-Rätsel
+//  Level 15: Zimmer 32 – die Vogelscheuche (Pümpel!) – für jedes Viertel ruft sie ein Skelett
+//            Zimmer 33 – sechs Zauber-Geister, die sich wegzaubern, wenn sie funkeln
+//            Zimmer 34 – das große Skelett (mehr Leben) und das Figuren-Rätsel
 //  Level 2 bis 15 hat Arthur selbst erfunden.
 // ================================================================
 
@@ -112,6 +114,7 @@ const BILDER = {
   koerperVorne: "__koerper_down__", koerperHinten: "__koerper_up__", koerperSeite: "__koerper_side__",
   armVorneL: "__arm_down_L__", armVorneR: "__arm_down_R__", armHintenL: "__arm_up_L__", armHintenR: "__arm_up_R__",
   armSeite: "__arm_side_V__",
+  vogelscheuche: "__vogelscheuche__",  // Arthurs Vogelscheuche (Level 15)
 };
 
 // Hier laden wir alle Bilder. Erst wenn alle fertig sind, geht's los.
@@ -137,6 +140,7 @@ const AUGEN = {
   drache:     { augen: [[0.392, 0.202, 0.049, 0.048], [0.562, 0.202, 0.049, 0.048]], strich: "#111014", rand: 1.45 },
   krake:      { augen: [[0.393, 0.606, 0.071, 0.071]], strich: "#111014", unten: true, rand: 1.35 },
   krakeGross: { augen: [[0.392, 0.60, 0.07, 0.067], [0.608, 0.60, 0.07, 0.067]], strich: "#111014", unten: true, rand: 1.35 },
+  vogelscheuche: { augen: [[0.425, 0.205, 0.067, 0.051], [0.617, 0.199, 0.067, 0.051]], strich: "#111014", rand: 1.3 },
   kabumm:     { augen: [[0.391, 0.512, 0.078, 0.06], [0.609, 0.512, 0.078, 0.06]], strich: "#111014", unten: true, rand: 1.3 },
 };
 // Kann dieses Gerät Bilder weichzeichnen? (Ältere iPads können das nicht – dann eben ohne)
@@ -322,8 +326,14 @@ const ZIMMER = {
   31: { level: 14, hinten: "#1d2f4a", links: "#192840", rechts: "#152236", streifen: "rgba(255,255,255,0.07)",
         herzen: true, herzenAnfang: 5, springen: true, tinte: true, band: true, lava: true, wasser: true,
         start: [450, 330], weg: [[30, 175, 870, 492]], kerzen: true, geld: GELD_LEVEL_3 },
-  // Level 15 – nur ein Raum: das große Skelett
-  32: { level: 15, hinten: "#1f1f26", links: "#1a1a20", rechts: "#15151a", streifen: "rgba(255,255,255,0.06)",
+  // Level 15 – Raum 1: die Vogelscheuche auf ihrem Pfahl (mit dem Pümpel hauen!)
+  32: { level: 15, hinten: "#3a2a18", links: "#33240f", rechts: "#2b1e0c", streifen: "rgba(255,200,80,0.10)",
+        tuerHinten: { von: 400, bis: 520 }, herzen: true, herzenAnfang: 5, springen: true, puempel: true, kerzen: true },
+  // Level 15 – Raum 2: sechs Zauber-Geister
+  33: { level: 15, hinten: "#2a1d3d", links: "#241933", rechts: "#1e152b", streifen: "rgba(200,150,255,0.08)",
+        tuerHinten: { von: 400, bis: 520 }, herzen: true, herzenAnfang: 5, springen: true, geisterBeissen: true, geisterTempo: 1.6, zaubern: true },
+  // Level 15 – Raum 3: das große Skelett
+  34: { level: 15, hinten: "#1f1f26", links: "#1a1a20", rechts: "#15151a", streifen: "rgba(255,255,255,0.06)",
         herzen: true, herzenAnfang: 5, springen: true, geisterBeissen: true, kerzen: true },
   22: { level: 9, hinten: "#3b2418", links: "#331f15", rechts: "#2b1a11", streifen: "rgba(255,140,40,0.10)",
         herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
@@ -490,7 +500,9 @@ function bossMachen(was) {
 }
 
 // Je weniger Kraft ein Kronen-Geist hat, desto kleiner wird er
-function bossGroesse(k) { return k.drache || k.kuerbis || k.skelett || k.bandBoss ? k.groesse : k.groesse * (0.7 + 0.3 * k.kraft / k.kraftMax); }
+// Ist dieser Boss gar kein Geist (sondern Truhe, Drache, Kürbis, Skelett, Kabumm, Vogelscheuche …)?
+function keinGeist(k) { return k.truhe || k.drache || k.kuerbis || k.skelett || k.bandBoss || k.vogelscheuche || k.knochenmann; }
+function bossGroesse(k) { return keinGeist(k) && !k.truhe ? k.groesse : k.groesse * (0.7 + 0.3 * k.kraft / k.kraftMax); }
 
 // ---- 8. Das Geld und die Rechen-Aufgabe ----------------------------
 let geld = [];            // die Münzen und Scheine, die im Zimmer liegen
@@ -948,15 +960,18 @@ function hauenBewegen() {
   maennchen.schlagPause = SCHLAG_PAUSE;
   schrittTon();
   const sp = schlagPunkt();
+  const rufen = [];
   for (const k of bosse) {
-    if (!k.drache || k.besiegt || k.liegt > 0) continue;
+    if (!(k.drache || k.puempelbar) || k.besiegt || k.liegt > 0) continue;
     const tief = sp.z < k.z ? k.tiefFaktor : 1;
     if (Math.hypot(sp.x - k.x, (sp.z - k.z) * tief) > k.radius + 45) continue;
     // Getroffen! PLOPP!
     k.kraft = Math.max(0, k.kraft - PUEMPEL_KRAFT);
     k.getroffen = 10;
     ploppTon();
-    sprechblase("PLOPP!", k.x + zufall(-40, 40), 240, k.z);
+    sprechblase(k.knochenmann ? "KLONK!" : "PLOPP!", k.x + zufall(-40, 40), k.knochenmann ? 200 : 240, k.z);
+    // Die Vogelscheuche ruft für jedes Viertel von ihrem Balken ein Skelett
+    if (k.vogelscheuche) while (k.skelette < 4 && k.kraft <= k.kraftMax * (3 - k.skelette) / 4 + 0.01) { k.skelette++; rufen.push(k); }
     for (let i = 0; i < 8; i++) sternchen(sp.x, 90, sp.z, i % 2 ? "#ffd34d" : "#ff5a5a");
     // Er weicht ein kleines Stück zurück
     const weit = Math.hypot(k.x - maennchen.x, k.z - maennchen.z) || 1;
@@ -971,11 +986,27 @@ function hauenBewegen() {
         tippZeigen("Der Drache ist umgefallen! Aber Achtung: Er hat noch <b>" + (k.leben === 1 ? "einen Balken" : k.leben + " Balken") + "</b>.");
       } else {
         k.besiegt = true;
-        riesenSchluerf();
-        sprechblase("Neiiiin!", k.x, 300, k.z);
+        if (k.knochenmann) { plumpsTon(); sprechblase("Klapperdiklapp!", k.x, 200, k.z); }
+        else { riesenSchluerf(); sprechblase("Neiiiin!", k.x, 300, k.z); }
       }
     }
   }
+  for (const k of rufen) skelettRufen(k);
+}
+
+// Die Vogelscheuche ruft ein Skelett – es taucht neben ihr auf, auf der Seite zum Männchen hin
+function skelettRufen(k) {
+  lachTon();
+  sprechblase(k.skelette < 4 ? "Skelett, hilf mir!" : "Mein letztes Skelett!", k.x, 380, k.z);
+  const seite = maennchen.x < k.x ? -1 : 1;
+  const x = Math.max(120, Math.min(BREITE - 120, k.x + seite * 140));
+  const z = Math.max(140, Math.min(TIEFE - 120, k.z + zufall(-20, 60)));
+  const s = bossMachen({ name: "Skelett", knochenmann: true, puempelbar: true, x, z, groesse: 190, kraftMax: 40, schwebt: 0,
+                         zMin: 100, radius: 55, jagt: 1.1, jagdPhasen: true, dx: 0.7 * seite, dz: 0.4, stoss: 12, ruf: "KLAPPER!" });
+  s.schubsPause = 90; s.getroffen = 0; s.jagtGerade = true; s.jagdUhr = 160;
+  bosse.push(s);
+  for (let j = 0; j < 16; j++) sternchen(x, 80, z, j % 2 ? "#f2eee4" : "#9aa3ad");
+  zaehlerZeigen("Skelette: " + k.skelette + " von 4");
 }
 
 // Eine schwarze Kanonenkugel (Level 12)
@@ -1672,7 +1703,8 @@ function platteMalen() {
 
 // Welches Bild gehört zu diesem Gegner?
 function bossBild(k) {
-  if (k.skelett) return bild.skelett;
+  if (k.skelett || k.knochenmann) return bild.skelett;
+  if (k.vogelscheuche) return bild.vogelscheuche;
   if (k.bandBoss) return bild.kabumm;
   if (k.kuerbis) return bild.kuerbis;
   if (k.drache) return k.maulAuf > 0 || k.besiegt ? bild.dracheFeuer : bild.drache;
@@ -1722,7 +1754,8 @@ const MUSIK_DATEIEN = [null,
   "L04_R08_raum", "L04_R09_endboss", "L05_R10_raum", "L05_R11_endboss", "L06_R12_raum", "L06_R13_raum", "L06_R14_raum",
   "L06_R15_endboss", "L07_R16_raum", "L07_R17_raum", "L07_R18_endboss", "L08_R19_raum", "L08_R20_raum", "L08_R21_endboss",
   "L09_R22_endboss", "L10_R23_endboss", "L11_R24_endboss", "L12_R25_endboss", "L13_R26_raum", "L13_R27_raum",
-  "L13_R28_endboss", "L14_R29_raum", "L14_R30_raum", "L14_R31_endboss", "L15_R32_endboss"];
+  "L13_R28_endboss", "L14_R29_raum", "L14_R30_raum", "L14_R31_endboss",
+  "L13_R28_endboss", "L01_R01_raum", "L15_R32_endboss"];      // 32 und 33 leihen sich ein Lied, bis es eigene gibt
 function musikDatei(name) { return "musik/" + name + ".mp3"; }
 const MUSIK_LAUT = 0.32;          // so laut ist die Musik (1 = ganz laut) – die Geräusche sollen noch gut zu hören sein
 let musikAn = true;
@@ -2233,6 +2266,11 @@ function geisterBewegen() {
   for (const g of geister) {
     g.wippen = g.wippen + 0.05;
     g.zappeln = 0;
+    // Level 15: Zauber-Geister funkeln eine Weile (dann können sie sich wegzaubern) und sind dann wieder müde
+    if (ZIMMER[zimmer].zaubern) {
+      g.zauberUhr = (g.zauberUhr || 0) - 1;
+      if (g.zauberUhr <= 0) { g.kannZaubern = !g.kannZaubern; g.zauberUhr = g.kannZaubern ? zufall(150, 230) : zufall(170, 250); }
+    }
 
     // Jagen – aber nicht die ganze Zeit: Mal ist er hinter dem Männchen her, mal schwebt er nur herum.
     if (boese) {
@@ -2246,6 +2284,7 @@ function geisterBewegen() {
 
     if (saugtGerade) {
       const abstand = vorDemRohr(g.x, g.z, 230);
+      if (abstand >= 0 && ZIMMER[zimmer].zaubern && g.kannZaubern) { geistWegzaubern(g); continue; }
       if (abstand >= 0) {
         zumRohrZiehen(g, 1.5 + (230 - abstand) * 0.03);   // je näher, desto schneller
         g.zappeln = 1;
@@ -2293,6 +2332,20 @@ function geisterBewegen() {
   geister = geister.filter((g) => !g.weg);
 }
 
+// Puff! Der Geist zaubert sich an eine andere Stelle – weit weg vom Männchen
+function geistWegzaubern(g) {
+  for (let i = 0; i < 14; i++) sternchen(g.x, 60, g.z, i % 2 ? "#c77dff" : "#ffffff");
+  puffTon();
+  for (let versuch = 0; versuch < 30; versuch++) {
+    const x = zufall(90, BREITE - 90), z = zufall(80, TIEFE - 80);
+    if (Math.hypot(x - maennchen.x, z - maennchen.z) > 320 || versuch === 29) { g.x = x; g.z = z; break; }
+  }
+  for (let i = 0; i < 10; i++) sternchen(g.x, 60, g.z, "#c77dff");
+  sprechblase("Hihi!", g.x, 190, g.z);
+  g.kannZaubern = false; g.zauberUhr = 230;        // jetzt ist er müde – das ist der richtige Moment!
+  g.jagtGerade = false; g.jagdUhr = 120;
+}
+
 function eingesaugt(g) {
   g.weg = true;
   gefangen = gefangen + 1;
@@ -2301,6 +2354,14 @@ function eingesaugt(g) {
   if ((zimmer === 24 || zimmer === 25) && geister.filter((x) => !x.weg).length === 0) {
     setTimeout(siegesMelodie, 300);
     geldRegen(450, 330);
+  }
+  if (zimmer === 33) {
+    zaehlerZeigen("Gefangen: " + gefangen + " von 6");
+    if (geister.filter((x) => !x.weg).length === 0) {
+      tuerOffen = true;
+      setTimeout(siegesMelodie, 400);
+      tippZeigen("Alle <b>Zauber-Geister</b> gefangen! Die <b>Tür hinten</b> ist offen – jetzt kommt das <b>große Skelett</b>!");
+    }
   }
   if (zimmer === 1) {
     zaehlerZeigen("Gefangen: " + gefangen + " von 5");
@@ -2326,6 +2387,7 @@ function einenBossBewegen(k) {
   k.wippen = k.wippen + 0.04;
   k.zappeln = 0;
   if (k.wut > 0) k.wut = k.wut - 1;
+  if ((k.vogelscheuche || k.knochenmann) && k.getroffen > 0) k.getroffen = k.getroffen - 1;
   // Die Truhe klappert beim Jagen mit dem Deckel – klapp, klapp, klapp
   if (k.truhe && k.jagtGerade && !k.besiegt && zeit % 20 === 0) klapperTon();
 
@@ -2345,6 +2407,10 @@ function einenBossBewegen(k) {
     if (k.wirdZuGeld) {
       // Der Riesengeist bläht sich auf, bis er platzt
       if (k.verschwinden > 45) { k.weg = true; letzterOrt = { x: k.x, z: k.z }; }
+    } else if (k.vogelscheuche || k.knochenmann) {
+      // Die Vogelscheuche zerfällt in Stroh, das Skelett in Knochen
+      if (k.verschwinden === 1) for (let i = 0; i < 30; i++) sternchen(k.x + zufall(-50, 50), zufall(20, 160), k.z, k.knochenmann ? (i % 2 ? "#f2eee4" : "#9aa3ad") : (i % 2 ? "#f0c846" : "#8a5a2b"));
+      if (k.verschwinden > 30) { k.weg = true; letzterOrt = { x: k.x, z: k.z }; }
     } else if (k.kuerbis) {
       // Der Kürbis zerplatzt in viele Stücke
       if (k.verschwinden === 1) for (let i = 0; i < 40; i++) sternchen(k.x + zufall(-60, 60), zufall(20, 160), k.z, i % 2 ? "#f58c1e" : "#46963c");
@@ -2509,6 +2575,14 @@ function hilfeRufen(k) {
 
 // Der letzte Kronen-Geist im Zimmer ist besiegt. Was passiert jetzt?
 function alleBosseBesiegt() {
+  // Level 15, erster Raum: Vogelscheuche und alle Skelette sind weg
+  if (zimmer === 32) {
+    tuerOffen = true;
+    setTimeout(siegesMelodie, 300);
+    zaehlerZeigen("Vogelscheuche: besiegt!");
+    tippZeigen("Die <b>Vogelscheuche</b> und alle <b>Skelette</b> sind weg! Die <b>Tür hinten</b> ist offen.");
+    return;
+  }
   // Level 5, erstes Zimmer: Hier geht es der Reihe nach
   if (zimmer === 10) {
     if (stufe === 1) {
@@ -3010,6 +3084,40 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
   }
 
   if (nummer === 32) {
+    // Level 15, erster Raum – Arthurs Zeichnung: die Vogelscheuche auf ihrem Pfahl. Saugen hilft nicht: Sie muss
+    // mit dem Pümpel gehauen werden. Für jedes Viertel von ihrem Balken ruft sie ein Skelett – die muss man auch pümpeln.
+    maennchen.x = 450; maennchen.z = 520;
+    maennchen.hatSauger = true;          // den Pümpel hat man schon in der Hand
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    bosse = [bossMachen({
+      name: "Vogelscheuche", vogelscheuche: true, puempelbar: true, x: 450, z: 230, groesse: 410, kraftMax: 160, schwebt: 0,
+      zMin: 130, tiefFaktor: 0.6, radius: 90, jagt: 1.0, jagdPhasen: true, dx: 0.8, dz: 0.5, stoss: 15, ruf: "KRAH!",
+      balkenOben: true,
+    })];
+    bosse[0].schubsPause = 180; bosse[0].jagdUhr = 200; bosse[0].skelette = 0; bosse[0].getroffen = 0;
+    zaehlerZeigen("Die Vogelscheuche!");
+    tippZeigen("Hau die <b>Vogelscheuche</b> mit dem <b>Pümpel</b>! Aber Achtung: Sie ruft <b>Skelette</b> zu Hilfe – die musst du auch pümpeln.");
+    bannerZeigen("Level 15");
+    setTimeout(() => {
+      if (zimmer === 32 && bosse[0]) { lachTon(); sprechblase("Hier kommt keiner vorbei!", bosse[0].x, 380, bosse[0].z); }
+    }, 900);
+  }
+
+  if (nummer === 33) {
+    // Level 15, zweiter Raum: sechs Geister, die einen jagen. Funkeln sie lila, zaubern sie sich weg,
+    // sobald man sie ansaugen will. Also: im richtigen Moment saugen – wenn sie NICHT funkeln!
+    maennchen.x = 450; maennchen.z = 520;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    geisterVerteilen(6);
+    for (const g of geister) { g.kannZaubern = Math.random() < 0.5; g.zauberUhr = zufall(60, 220); }
+    zaehlerZeigen("Gefangen: 0 von 6");
+    tippZeigen("Sechs <b>Zauber-Geister</b>! Wenn einer <b>lila funkelt</b>, zaubert er sich weg. Saug ihn, wenn er <b>nicht funkelt</b>!");
+  }
+
+  if (nummer === 34) {
     // Level 15 – so hat Arthur es gemalt: ein großes Skelett, größer als das andere und mit mehr Leben.
     // Ist es weggesaugt, kommt das Figuren-Rätsel – und dann ist das Level geschafft.
     maennchen.x = 450; maennchen.z = 540;
@@ -3023,9 +3131,9 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     bosse[0].schubsPause = 200; bosse[0].jagdUhr = 220;
     zaehlerZeigen("Das große Skelett!");
     tippZeigen("Das <b>große Skelett</b> – es hält viel mehr aus! Saug es weg, dann kommt das <b>Rätsel</b>.");
-    bannerZeigen("Level 15");
+    bannerZeigen("Großes Skelett!");
     setTimeout(() => {
-      if (zimmer === 32 && bosse[0]) { lachTon(); sprechblase("Ich bin das größte Skelett der Welt!", bosse[0].x, 420, bosse[0].z); }
+      if (zimmer === 34 && bosse[0]) { lachTon(); sprechblase("Ich bin das größte Skelett der Welt!", bosse[0].x, 420, bosse[0].z); }
     }, 900);
   }
 
@@ -3541,12 +3649,12 @@ function lampenSammeln() {
   }
   if (tuerOffen && Z.tuerRechts) add(B, 90, (TUER.von + TUER.bis) / 2, "255,211,77", 420, 0.9, 0.18);
   if (tuerOffen && Z.tuerHinten && !Z.tuerHinten.zu) add((Z.tuerHinten.von + Z.tuerHinten.bis) / 2, 90, 0, "255,211,77", 420, 0.9, 0.18);
-  for (const g of geister) if (!g.weg) add(g.x, 70, g.z, "90,170,255", 420, 0.85, 0.32);
+  for (const g of geister) if (!g.weg) add(g.x, 70, g.z, g.kannZaubern && Z.zaubern ? "190,120,255" : "90,170,255", 420, 0.85, 0.32);
   for (const k of bosse) {
     if (k.besiegt && !k.wirdZuGeld) continue;
     if (k.kuerbis) add(k.x, 90, k.z, "255,140,40", 480, 0.85, 0.12);
     else if (k.bandBoss) add(k.x, 240, k.z, "255,180,80", 220, 0.6 + 0.3 * Math.sin(zeit * 0.9), 0.12);
-    else if (!k.truhe && !k.drache && !k.skelett) add(k.x, 130, k.z, k.blinktGerade ? "255,60,90" : "90,170,255", 680, 0.9, 0.28);
+    else if (!keinGeist(k)) add(k.x, 130, k.z, k.blinktGerade ? "255,60,90" : "90,170,255", 680, 0.9, 0.28);
   }
   for (const d of dynamit) {
     if (d.art === "feuer") add(d.x, 60, d.z, "255,140,40", 420, 1, 0.35);
@@ -3837,11 +3945,14 @@ const DEKO_THEMEN = {
   piraten:    { w: [["steuerrad"], ["anker"], ["bild", "karte"], ["rettungsring"], ["bild", "schiff"]], b: ["fass", "kugeln", "kiste"] },
   kuerbis:    { w: [["bild", "kuerbis"], ["regal", ["glas", "trank", "schaedel"]], ["bild", "mond"]], b: ["kuerbischen", "fass"] },
   knochen:    { w: [["knochen"], ["regal", ["schaedel", "trank", "schaedel"]], ["bild", "schaedel"], ["knochen"]], b: ["knochenhaufen", "grabstein"] },
+  spuk:       { w: [["bild", "geist"], ["uhr"], ["regal", ["trank", "glas", "schaedel"]], ["bild", "mond"]], b: ["pflanze", "grabstein"] },
   bombe:      { w: [["warnschild"], ["regal", ["kugel", "kugel", "flasche"]], ["warnschild"]], b: ["tnt", "kiste"] },
 };
 function dekoThema(z) {
   if (z === 28 || z === 29) return "kuerbis";
-  if (z === 30 || z === 32) return "knochen";
+  if (z === 30 || z === 34) return "knochen";
+  if (z === 32) return "kuerbis";
+  if (z === 33) return "spuk";
   if (z === 31) return "bombe";
   const L = ZIMMER[z].level;
   return L <= 2 ? "kinder" : L <= 4 ? "buecher" : L === 5 ? "schatz" : L <= 7 ? "burg" : L === 8 ? "donner"
@@ -4382,6 +4493,15 @@ function geistMalen(g) {
   lebendigMalen(bild.geist, p.x, p.y, groesse * p.groesse, g.dx < 0, phaseVon(g), g.zappeln ? 0 : 1);
   ueberstrahlen(bild.geist, p.x, p.y, groesse * p.groesse, 0.22);
   malen.globalAlpha = 1;
+  // Zauber-Geist: Lila Funkeln rundherum heißt "Achtung, ich kann mich wegzaubern!"
+  if (ZIMMER[zimmer].zaubern && g.kannZaubern) {
+    const r = groesse * p.groesse;
+    for (let i = 0; i < 6; i++) {
+      const w = zeit * 0.07 + i * 1.047;
+      sternMalen(p.x + Math.cos(w) * r * 0.55, p.y - r * 0.5 + Math.sin(w) * r * 0.42, 6 * p.groesse, i % 2 ? "#c77dff" : "#ffffff", 0.95);
+    }
+    malen.globalAlpha = 1;
+  }
   if (g.jagtGerade && ZIMMER[zimmer].geisterBeissen) jagdZeichenMalen(g.x, schweben + groesse + 14, g.z);
 }
 
@@ -4437,6 +4557,8 @@ function bossMalen(k) {
   const schweben = k.truhe ? Math.abs(Math.sin(k.wippen * 4)) * 16
                  : k.drache ? Math.abs(Math.sin(k.wippen * 3)) * 8 * (1 - kipp)
                  : k.kuerbis ? Math.abs(Math.sin(k.wippen * 4)) * 22
+                 : k.vogelscheuche ? Math.abs(Math.sin(k.wippen * 4)) * 28 * (1 - kipp)
+                 : k.knochenmann ? Math.abs(Math.sin(k.wippen * 5)) * 7
                            : (k.schwebt + Math.sin(k.wippen) * 12) * (1 - kipp);
   const b = bossBild(k);
   let zittern = k.zappeln ? zufall(-5, 5) : 0;
@@ -4450,7 +4572,7 @@ function bossMalen(k) {
   schattenMalen(k.x, k.z, groesse * 0.38, 0.3);
   const p = aufsBild(k.x + zittern, schweben, k.z);
   // Ein goldenes Leuchten um ihn herum – beim Blinken leuchtet es rot
-  if (kipp === 0 && !k.truhe && !k.drache && !k.kuerbis && !k.skelett && !k.bandBoss) {
+  if (kipp === 0 && !keinGeist(k)) {
     malen.fillStyle = k.blinktGerade ? "rgba(255, 40, 80, " + (zeit % 8 < 4 ? 0.45 : 0.15) + ")"
                                      : "rgba(255, 211, 77, " + (0.12 + 0.06 * Math.sin(zeit * 0.1)) + ")";
     malen.beginPath(); malen.arc(p.x, p.y - groesse * p.groesse * 0.5, groesse * p.groesse * 0.55, 0, 6.28); malen.fill();
@@ -4458,7 +4580,7 @@ function bossMalen(k) {
   malen.globalAlpha = k.blinktGerade && zeit % 8 < 4 ? 0.35 : 0.95;       // beim Blinken flackert er
   if (k.wut > 0 && !k.kuerbis) malen.filter = "hue-rotate(150deg) saturate(1.5)";       // nach dem Schubsen leuchtet er rot vor Wut
   if (k.besiegt && k.wirdZuGeld && zeit % 6 < 3) malen.filter = "sepia(1) saturate(4) brightness(1.3)";   // er wird golden
-  if (k.drache || k.kuerbis || k.skelett || k.bandBoss) malen.globalAlpha = 1;
+  if (keinGeist(k) && !k.truhe) malen.globalAlpha = 1;
   if (k.bandBoss && k.getroffen > 0 && zeit % 4 < 2) malen.filter = "brightness(2.2)";
   if (k.kuerbis && k.getroffen > 0) {       // plattgedrückt!
     malen.save(); malen.translate(p.x, p.y); malen.scale(1.25, 0.6 + 0.4 * (1 - k.getroffen / 24)); malen.translate(-p.x, -p.y);

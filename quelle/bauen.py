@@ -11,7 +11,7 @@ HIER = pathlib.Path(__file__).parent
 BILDER = ["player_down", "player_up", "player_side", "ghost_blue", "vacuum", "ghost_boss",
           "kiste", "teufel", "kiste_rot", "kanone", "dynamit", "truhe_zu", "truhe_auf",
           "kanone_spinne", "netz_knaeuel", "netz_offen", "drache", "drache_feuer", "puempel", "krake", "krake_gross", "kuerbis", "skelett", "kabumm",
-          "koerper_down", "koerper_up", "koerper_side", "arm_down_L", "arm_down_R", "arm_up_L", "arm_up_R", "arm_side_V"]
+          "koerper_down", "koerper_up", "koerper_side", "arm_down_L", "arm_down_R", "arm_up_L", "arm_up_R", "arm_side_V", "vogelscheuche"]
 
 kopf = (HIER / "kopf.html").read_text(encoding="utf-8")
 spiel = (HIER / "spiel.js").read_text(encoding="utf-8")
