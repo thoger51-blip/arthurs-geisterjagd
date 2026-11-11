@@ -37,7 +37,7 @@
   }
   html, body { height: 100%; }
   body {
-    background: var(--himmel);
+    background: radial-gradient(ellipse at 50% 35%, #4a1c52 0%, var(--himmel) 55%, #170818 100%) fixed;
     color: var(--text);
     font-family: var(--schrift);
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -56,7 +56,8 @@
     position: relative;
     width: min(100%, 960px, calc((100vh - 190px) * 1.6)); aspect-ratio: 8 / 5; max-width: 100%;
   }
-  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; border-radius: 14px;
+           box-shadow: 0 0 0 3px #111014, 0 0 0 6px #ffd34d55, 0 18px 50px rgba(0, 0, 0, .55); }
   .tipp { margin: 0; font-size: 17px; text-align: center; min-height: 1.5em; }
   .tipp b { color: var(--gold); }
   .nochmal {
@@ -344,7 +345,7 @@ function ladeBilder(fertig) {
   let geladen = 0;
   for (const name of namen) {
     const b = new Image();
-    b.onload = () => { geladen = geladen + 1; if (geladen === namen.length) { augenZuMachen(); fertig(); } };
+    b.onload = () => { geladen = geladen + 1; if (geladen === namen.length) { figurenFormen(); augenZuMachen(); fertig(); } };
     b.src = BILDER[name];
     bild[name] = b;
   }
@@ -387,6 +388,56 @@ function ueberstrahlen(b, x, y, hoehe, staerke) {
   malen.globalCompositeOperation = "lighter";
   malen.globalAlpha = staerke;
   malen.drawImage(L.bild, x - (b.width / 2 + L.rand) * s, y - (b.height + L.rand) * s, L.bild.width * s, L.bild.height * s);
+  malen.restore();
+}
+
+// Arthurs Figuren bleiben, wie sie sind – sie bekommen nur Licht von oben und unten etwas Schatten.
+// So sehen sie rund und plastisch aus, wie echte Stoff-Figuren. (Einmal beim Laden, kostet danach nichts.)
+function figurenFormen() {
+  for (const name of Object.keys(bild)) {
+    const b = bild[name];
+    if (!b || !b.width || name.startsWith("arm")) continue;
+    try {
+      const c = document.createElement("canvas"); c.width = b.width; c.height = b.height;
+      const m = c.getContext("2d");
+      m.drawImage(b, 0, 0);
+      m.globalCompositeOperation = "source-atop";
+      const v = m.createLinearGradient(0, 0, 0, b.height);
+      v.addColorStop(0, "rgba(255, 250, 235, 0.17)"); v.addColorStop(0.42, "rgba(255, 255, 255, 0)");
+      v.addColorStop(0.7, "rgba(40, 0, 50, 0.05)"); v.addColorStop(1, "rgba(40, 0, 50, 0.26)");
+      m.fillStyle = v; m.fillRect(0, 0, b.width, b.height);
+      bild[name] = c;
+    } catch (e) { /* dann bleibt das Bild eben flach */ }
+  }
+}
+// Der Boden glänzt ein bisschen: Figuren spiegeln sich schwach darin
+function spiegelBild(b) {
+  if (b.spiegel !== undefined) return b.spiegel;
+  b.spiegel = null;
+  if (!b.width) return null;
+  try {
+    const c = document.createElement("canvas"); c.width = b.width; c.height = b.height;
+    const m = c.getContext("2d");
+    m.translate(0, b.height); m.scale(1, -1); m.drawImage(b, 0, 0); m.setTransform(1, 0, 0, 1, 0, 0);
+    m.globalCompositeOperation = "destination-in";
+    const v = m.createLinearGradient(0, 0, 0, b.height);
+    v.addColorStop(0, "rgba(0,0,0,0.6)"); v.addColorStop(0.5, "rgba(0,0,0,0)");
+    m.fillStyle = v; m.fillRect(0, 0, b.width, b.height);
+    b.spiegel = c;
+  } catch (e) { /* dann eben ohne */ }
+  return b.spiegel;
+}
+function spiegelungMalen(b, x, yFuss, yBoden, hoehe, spiegeln) {
+  const Z = ZIMMER[zimmer];
+  if (Z.lava || Z.wasser || !b) return;
+  const sp = spiegelBild(b);
+  if (!sp) return;
+  const breite = hoehe * b.width / b.height;
+  malen.save();
+  malen.globalAlpha = 0.32;
+  malen.translate(x, 2 * yBoden - yFuss);
+  if (spiegeln) malen.scale(-1, 1);
+  malen.drawImage(sp, -breite / 2, 0, breite, hoehe * 0.8);
   malen.restore();
 }
 
@@ -4256,6 +4307,123 @@ function dekoMalen() {
   malen.restore();
 }
 
+// ---- 15f. Schöne Zimmer: Holzvertäfelung, Leisten, echte Dielen, glänzender Boden ----
+// Ein Punkt auf einer Wand: a = wie weit an der Wand entlang, y = wie hoch
+function wandPunkt(wand, a, y) { return wand === "hinten" ? [a, y, 0] : wand === "links" ? [0, y, a] : [BREITE, y, a]; }
+function wandStueck(wand, a1, a2, y1, y2, farbe, rand) {
+  flaeche([wandPunkt(wand, a1, y1), wandPunkt(wand, a2, y1), wandPunkt(wand, a2, y2), wandPunkt(wand, a1, y2)], farbe, rand);
+}
+function wandLinie(wand, a1, y1, a2, y2, farbe, dicke) { linie(wandPunkt(wand, a1, y1), wandPunkt(wand, a2, y2), farbe, dicke); }
+const SOCKEL = 74;                       // so hoch ist die Holzvertäfelung unten an der Wand
+function wandSchmuckMalen(wand, laenge) {
+  const hell = "rgba(255, 245, 235, ", dunkel = "rgba(25, 0, 30, ";
+  // Vertäfelung: unten ist die Wand aus dunklerem Holz mit Kassetten
+  wandStueck(wand, 0, laenge, 0, SOCKEL, dunkel + "0.30)");
+  for (let a = 0; a + 90 <= laenge + 1; a += 90) {
+    const a1 = a + 9, a2 = a + 81, y1 = 24, y2 = SOCKEL - 12;
+    wandStueck(wand, a1, a2, y1, y2, hell + "0.07)");
+    wandLinie(wand, a1, y2, a2, y2, dunkel + "0.55)", 2); wandLinie(wand, a1, y1, a1, y2, dunkel + "0.45)", 2);
+    wandLinie(wand, a1, y1, a2, y1, hell + "0.30)", 1.5); wandLinie(wand, a2, y1, a2, y2, hell + "0.22)", 1.5);
+  }
+  // Die Leiste oben auf der Vertäfelung
+  wandStueck(wand, 0, laenge, SOCKEL - 3, SOCKEL + 5, hell + "0.30)");
+  wandLinie(wand, 0, SOCKEL + 5, laenge, SOCKEL + 5, hell + "0.45)", 1.5);
+  wandLinie(wand, 0, SOCKEL - 4, laenge, SOCKEL - 4, dunkel + "0.6)", 2.5);
+  // Fußleiste
+  wandStueck(wand, 0, laenge, 0, 15, dunkel + "0.5)");
+  wandLinie(wand, 0, 15, laenge, 15, hell + "0.28)", 1.5);
+  // Stuckleiste oben unter der Decke
+  wandStueck(wand, 0, laenge, WANDHOEHE - 20, WANDHOEHE, hell + "0.16)");
+  wandLinie(wand, 0, WANDHOEHE - 20, laenge, WANDHOEHE - 20, dunkel + "0.5)", 2.5);
+  wandLinie(wand, 0, WANDHOEHE - 11, laenge, WANDHOEHE - 11, hell + "0.25)", 1.5);
+}
+// Der Boden aus einzelnen Dielen: jede ein bisschen anders, versetzt verlegt, mit Fugen
+function dielenMalen() {
+  const B = BREITE, T = TIEFE, REIHE = 56;
+  let saat = 7 + zimmer * 13;
+  const zuf = () => { saat = (saat * 16807) % 2147483647; return saat / 2147483647; };
+  for (let z = 0, reihe = 0; z < T; z += REIHE, reihe++) {
+    let x = -zuf() * 180;
+    while (x < B) {
+      const lang = 170 + zuf() * 150, x1 = Math.max(0, x), x2 = Math.min(B, x + lang);
+      const t = zuf();
+      flaeche([[x1, 0, z], [x2, 0, z], [x2, 0, z + REIHE], [x1, 0, z + REIHE]],
+              t < 0.5 ? "rgba(255, 255, 255, " + (t * 0.16).toFixed(3) + ")" : "rgba(90, 0, 60, " + ((t - 0.5) * 0.18).toFixed(3) + ")");
+      if (x2 < B) { linie([x2, 0, z], [x2, 0, z + REIHE], "rgba(110, 10, 60, 0.38)", 1.5); linie([x2 + 2, 0, z], [x2 + 2, 0, z + REIHE], "rgba(255, 255, 255, 0.10)", 1); }
+      // zwei kleine Nägel am Dielen-Ende
+      if (x2 < B) for (const dz of [14, REIHE - 14]) { const n = aufsBild(x2 - 7, 0, z + dz); malen.fillStyle = "rgba(90, 10, 50, 0.35)"; malen.beginPath(); malen.arc(n.x, n.y, 1.4 * n.groesse, 0, 6.28); malen.fill(); }
+      x += lang;
+    }
+    linie([0, 0, z], [B, 0, z], "rgba(110, 10, 60, 0.38)", 1.6);
+    linie([0, 0, z + 2.5], [B, 0, z + 2.5], "rgba(255, 255, 255, 0.11)", 1);
+  }
+}
+// Glanz: Der Boden ist poliert. Hinten spiegelt sich die Wand, in der Mitte liegt ein weicher Lichtfleck.
+function bodenGlanzMalen(Z) {
+  const B = BREITE, T = TIEFE;
+  const boden = [[0, 0, 0], [B, 0, 0], [B, 0, T], [0, 0, T]];
+  const yh = aufsBild(0, 0, 0).y, yv = aufsBild(0, 0, T).y;
+  const spiegel = malen.createLinearGradient(0, yh, 0, yh + (yv - yh) * 0.45);
+  spiegel.addColorStop(0, "rgba(255, 235, 250, 0.16)"); spiegel.addColorStop(1, "rgba(255, 235, 250, 0)");
+  flaeche(boden, spiegel);
+  malen.save();
+  malen.beginPath(); boden.forEach(([x, y, z], i) => { const q = aufsBild(x, y, z); if (i) malen.lineTo(q.x, q.y); else malen.moveTo(q.x, q.y); }); malen.closePath(); malen.clip();
+  const m = aufsBild(B / 2, 0, T * 0.5);
+  malen.translate(m.x, m.y); malen.scale(1, 0.34);
+  const fleck = malen.createRadialGradient(0, 0, 0, 0, 0, 430);
+  fleck.addColorStop(0, "rgba(255, 250, 240, 0.15)"); fleck.addColorStop(1, "rgba(255, 250, 240, 0)");
+  malen.fillStyle = fleck; malen.beginPath(); malen.arc(0, 0, 430, 0, 6.28); malen.fill();
+  malen.restore();
+  // Durchs Fenster fällt Mondlicht auf den Boden – mit dem Schatten vom Fensterkreuz
+  if (Z.fenster) {
+    const y0 = aufsBild(0, 0, 0).y, y1 = aufsBild(0, 0, 340).y;
+    const schein = malen.createLinearGradient(0, y0, 0, y1);
+    const f = gruselZimmer ? "255, 215, 150" : "200, 215, 255";
+    schein.addColorStop(0, "rgba(" + f + ", 0.26)"); schein.addColorStop(1, "rgba(" + f + ", 0)");
+    for (const [a1, a2, b1, b2] of [[356, 446, 268, 432], [454, 544, 468, 632]]) {
+      flaeche([[a1, 0, 0], [a2, 0, 0], [b2, 0, 150], [b1, 0, 150]], schein);
+      flaeche([[b1, 0, 165], [b2, 0, 165], [b2 + (b2 - a2) * 1.1, 0, 330], [b1 + (b1 - a1) * 1.1, 0, 330]], schein);
+    }
+  }
+}
+
+// Eine richtige Tür: Holzrahmen, Türblatt mit zwei Feldern und goldenem Knauf.
+// Ist sie offen, strahlt goldenes Licht heraus und fällt auf den Boden.
+function tuerSchoenMalen(wand, von, bis, hoehe, offen, farbe) {
+  const P = (a, y) => wandPunkt(wand, a, y);
+  const rahmen = 11;
+  flaeche([P(von - rahmen, 0), P(bis + rahmen, 0), P(bis + rahmen, hoehe + rahmen), P(von - rahmen, hoehe + rahmen)], "#6b4a2f", 4);
+  wandLinie(wand, von - rahmen + 3, 2, von - rahmen + 3, hoehe + rahmen - 3, "rgba(255, 230, 200, 0.35)", 2);
+  wandLinie(wand, von - rahmen + 3, hoehe + rahmen - 3, bis + rahmen - 3, hoehe + rahmen - 3, "rgba(255, 230, 200, 0.35)", 2);
+  if (offen) {
+    const puls = 0.7 + Math.sin(zeit * 0.08) * 0.25;
+    flaeche([P(von, 0), P(bis, 0), P(bis, hoehe), P(von, hoehe)], "#fff1b8", 3);
+    flaeche([P(von, 0), P(bis, 0), P(bis, hoehe), P(von, hoehe)], "rgba(255, 190, 60, " + (0.75 - puls * 0.45) + ")");
+    // Lichtkegel auf dem Boden
+    const mitte = (von + bis) / 2, halb = (bis - von) / 2;
+    const kegel = wand === "hinten" ? [[von, 0, 0], [bis, 0, 0], [mitte + halb * 2.1, 0, 210], [mitte - halb * 2.1, 0, 210]]
+                : wand === "rechts" ? [[BREITE, 0, von], [BREITE, 0, bis], [BREITE - 230, 0, mitte + halb * 2], [BREITE - 230, 0, mitte - halb * 2]]
+                : [[0, 0, von], [0, 0, bis], [230, 0, mitte + halb * 2], [230, 0, mitte - halb * 2]];
+    const a = aufsBild(...kegel[0]), e = aufsBild(...kegel[2]);
+    const schein = wand === "hinten" ? malen.createLinearGradient(0, a.y, 0, e.y) : malen.createLinearGradient(a.x, 0, e.x, 0);
+    schein.addColorStop(0, "rgba(255, 215, 90, " + (0.42 * puls) + ")"); schein.addColorStop(1, "rgba(255, 215, 90, 0)");
+    flaeche(kegel, schein);
+    return;
+  }
+  flaeche([P(von, 0), P(bis, 0), P(bis, hoehe), P(von, hoehe)], farbe || "#3d2436", 3);
+  const br = bis - von, hell = "rgba(255, 235, 245, ", dunkel = "rgba(0, 0, 0, ";
+  for (const [y1, y2] of [[hoehe * 0.50, hoehe * 0.92], [hoehe * 0.08, hoehe * 0.42]]) {
+    const a1 = von + br * 0.16, a2 = bis - br * 0.16;
+    flaeche([P(a1, y1), P(a2, y1), P(a2, y2), P(a1, y2)], hell + "0.07)");
+    wandLinie(wand, a1, y2, a2, y2, dunkel + "0.5)", 2); wandLinie(wand, a1, y1, a1, y2, dunkel + "0.4)", 2);
+    wandLinie(wand, a1, y1, a2, y1, hell + "0.25)", 1.5); wandLinie(wand, a2, y1, a2, y2, hell + "0.18)", 1.5);
+  }
+  const k = aufsBild(...P(bis - br * 0.13, hoehe * 0.47));
+  malen.fillStyle = "#111014"; malen.beginPath(); malen.arc(k.x, k.y, 7.5 * k.groesse, 0, 6.28); malen.fill();
+  malen.fillStyle = "#ffd34d"; malen.beginPath(); malen.arc(k.x, k.y, 5.5 * k.groesse, 0, 6.28); malen.fill();
+  malen.fillStyle = "#fff6c8"; malen.beginPath(); malen.arc(k.x - 1.8 * k.groesse, k.y - 1.8 * k.groesse, 1.8 * k.groesse, 0, 6.28); malen.fill();
+}
+
 // ---- 16. Das Zimmer malen ----------------------------------------
 // Malt eine Fläche mit vielen Ecken (jede Ecke ist ein Punkt im Zimmer)
 function flaeche(ecken, farbe, rand) {
@@ -4308,6 +4476,7 @@ function hintergrundBauen() {
   const wandLicht = malen.createLinearGradient(0, wandOben, 0, wandUnten);
   wandLicht.addColorStop(0, "rgba(10, 0, 20, 0.28)"); wandLicht.addColorStop(1, "rgba(10, 0, 20, 0)");
   flaeche([[0, 0, 0], [B, 0, 0], [B, H, 0], [0, H, 0]], wandLicht);
+  wandSchmuckMalen("hinten", B); wandSchmuckMalen("links", T); wandSchmuckMalen("rechts", T);
   if (gruselZimmer) {                                     // Boss-Zimmer: die Wände werden dunkel
     flaeche([[0, 0, 0], [B, 0, 0], [B, H, 0], [0, H, 0]], "rgba(8, 0, 18, 0.4)");
     flaeche([[0, 0, 0], [0, 0, T], [0, H, T], [0, H, 0]], "rgba(8, 0, 18, 0.45)");
@@ -4316,11 +4485,9 @@ function hintergrundBauen() {
 
   // Der pinke Fußboden mit Dielen
   flaeche([[0, 0, 0], [B, 0, 0], [B, 0, T], [0, 0, T]], "#ff69b4");
-  for (let z = 0; z < T; z = z + 56) {
-    if ((z / 56) % 2 === 1) flaeche([[0, 0, z], [B, 0, z], [B, 0, z + 56], [0, 0, z + 56]], "rgba(255,255,255,0.06)");
-    linie([0, 0, z], [B, 0, z], "rgba(120, 20, 70, 0.25)", 1.5);
-  }
+  dielenMalen();
   musterUeber([[0, 0, 0], [B, 0, 0], [B, 0, T], [0, 0, T]], holzMuster, SCHOEN.holz);
+  bodenGlanzMalen(Z);
   eckenSchattenMalen();
   if (gruselZimmer) {                                     // ... und der Boden wird dämmrig-lila
     flaeche([[0, 0, 0], [B, 0, 0], [B, 0, T], [0, 0, T]], "rgba(34, 0, 46, 0.34)");
@@ -4380,8 +4547,20 @@ function zimmerMalen() {
       malen.fillStyle = "#1b1640";
       malen.beginPath(); malen.arc(mond.x - 9, mond.y - 5, 17, 0, 6.28); malen.fill();
     }
-    linie([(fx1 + fx2) / 2, fy1, 0], [(fx1 + fx2) / 2, fy2, 0], "#111014", 7);
-    linie([fx1, (fy1 + fy2) / 2, 0], [fx2, (fy1 + fy2) / 2, 0], "#111014", 7);
+    linie([(fx1 + fx2) / 2, fy1, 0], [(fx1 + fx2) / 2, fy2, 0], "#f3e9dc", 6);
+    linie([fx1, (fy1 + fy2) / 2, 0], [fx2, (fy1 + fy2) / 2, 0], "#f3e9dc", 6);
+    // weißer Rahmen und Fensterbank
+    for (const [a, b] of [[[fx1, fy1, 0], [fx2, fy1, 0]], [[fx1, fy2, 0], [fx2, fy2, 0]], [[fx1, fy1, 0], [fx1, fy2, 0]], [[fx2, fy1, 0], [fx2, fy2, 0]]]) { linie(a, b, "#111014", 15); }
+    for (const [a, b] of [[[fx1, fy1, 0], [fx2, fy1, 0]], [[fx1, fy2, 0], [fx2, fy2, 0]], [[fx1, fy1, 0], [fx1, fy2, 0]], [[fx2, fy1, 0], [fx2, fy2, 0]]]) { linie(a, b, "#f3e9dc", 9); }
+    flaeche([[fx1 - 16, fy1 - 12, 0], [fx2 + 16, fy1 - 12, 0], [fx2 + 16, fy1 - 2, 0], [fx1 - 16, fy1 - 2, 0]], "#f3e9dc", 3);
+    // Vorhänge links und rechts, oben eine Stange
+    const vf = gruselZimmer ? "#5b2a6e" : "#c2185b";
+    for (const [xa, xb] of [[fx1 - 34, fx1 + 14], [fx2 - 14, fx2 + 34]]) {
+      flaeche([[xa, fy2 + 14, 0], [xb, fy2 + 14, 0], [xb + (xb > 450 ? 6 : -6), fy1 - 18, 0], [xa + (xb > 450 ? 6 : -6), fy1 - 18, 0]], vf, 3);
+      for (let i = 1; i < 4; i++) { const xx = xa + (xb - xa) * i / 4; linie([xx, fy2 + 12, 0], [xx + (xb > 450 ? 5 : -5), fy1 - 16, 0], "rgba(0, 0, 0, 0.22)", 2); }
+    }
+    linie([fx1 - 46, fy2 + 16, 0], [fx2 + 46, fy2 + 16, 0], "#111014", 7);
+    linie([fx1 - 46, fy2 + 16, 0], [fx2 + 46, fy2 + 16, 0], "#ffd34d", 3.5);
   }
 
   // Flackernde Kerzen an der Rückwand (im Zimmer vom Riesengeist)
@@ -4405,33 +4584,17 @@ function zimmerMalen() {
   // Die Tür in der Rückwand – da geht es zum Riesengeist
   if (Z.tuerHinten) {
     const TH = Z.tuerHinten, hoch = TUER_HINTEN_HOEHE;
-    const ecken = [[TH.von, 0, 0], [TH.bis, 0, 0], [TH.bis, hoch, 0], [TH.von, hoch, 0]];
-    if (!tuerOffen || TH.zu) {
-      flaeche(ecken, TH.farbe || "#0d0b12", 5);
-      const klinke = aufsBild(TH.bis - 20, 85, 0);
-      malen.fillStyle = "#ffd34d";
-      malen.beginPath(); malen.arc(klinke.x, klinke.y, 5, 0, 6.28); malen.fill();
-    } else {
-      flaeche(ecken, "rgba(255, 211, 77, " + (0.65 + Math.sin(zeit * 0.08) * 0.25) + ")", 5);
-    }
+    tuerSchoenMalen("hinten", TH.von, TH.bis, hoch, tuerOffen && !TH.zu, TH.farbe);
   }
 
   // Links die Tür, durch die das Männchen hereingekommen ist
   if (Z.tuerLinks) {
-    flaeche([[0, 0, TUER.von], [0, 0, TUER.bis], [0, TUER.hoehe, TUER.bis], [0, TUER.hoehe, TUER.von]], "#1a0f18", 4);
+    tuerSchoenMalen("links", TUER.von, TUER.bis, TUER.hoehe, false, "#2c1a28");
   }
 
   // Die Tür in der rechten Wand
   if (Z.tuerRechts) {
-    const tuerEcken = [[B, 0, TUER.von], [B, 0, TUER.bis], [B, TUER.hoehe, TUER.bis], [B, TUER.hoehe, TUER.von]];
-    if (!tuerOffen) {
-      flaeche(tuerEcken, "#2a1a24", 4);
-      const klinke = aufsBild(B, 85, TUER.bis - 22);
-      malen.fillStyle = "#ffd34d";
-      malen.beginPath(); malen.arc(klinke.x, klinke.y, 6, 0, 6.28); malen.fill();
-    } else {
-      flaeche(tuerEcken, "rgba(255, 211, 77, " + (0.65 + Math.sin(zeit * 0.08) * 0.25) + ")", 4);
-    }
+    tuerSchoenMalen("rechts", TUER.von, TUER.bis, TUER.hoehe, tuerOffen);
   }
 
   // (der Fußboden steckt schon im Hintergrund)
@@ -4457,11 +4620,11 @@ function zimmerMalen() {
   flaeche([[0, 0, 0], [B, 0, 0], [B, 0, 60], [0, 0, 60]], verlauf);
 
   // Schwarze Fußleisten und Kanten – wie bei einem Puppenhaus
-  linie([0, 0, 0], [B, 0, 0], "#111014", 6);
-  linie([0, 0, 0], [0, 0, T], "#111014", 6);
-  linie([B, 0, 0], [B, 0, T], "#111014", 6);
-  linie([0, 0, 0], [0, H, 0], "#111014", 4);
-  linie([B, 0, 0], [B, H, 0], "#111014", 4);
+  linie([0, 0, 0], [B, 0, 0], "#1a0d1f", 3);
+  linie([0, 0, 0], [0, 0, T], "#1a0d1f", 3);
+  linie([B, 0, 0], [B, 0, T], "#1a0d1f", 3);
+  linie([0, 0, 0], [0, H, 0], "#1a0d1f", 2.5);
+  linie([B, 0, 0], [B, H, 0], "#1a0d1f", 2.5);
   linie([0, H, 0], [B, H, 0], "#111014", 10);
   linie([0, H, 0], [0, H, T], "#111014", 10);
   linie([B, H, 0], [B, H, T], "#111014", 10);
@@ -4597,6 +4760,7 @@ function maennchenMalen() {
 
   const huepfen = -Math.abs(takt) * h * 0.03 * stark;                 // bei jedem Schritt ein kleiner Hüpfer
   const atmen = maennchen.laeuft ? 1 : 1 + Math.sin(zeit * 0.06) * 0.012;  // im Stehen leise atmen
+  spiegelungMalen(b, p.x, p.y, aufsBild(maennchen.x, 0, maennchen.z).y, h, maennchen.blickt === "seite" && maennchen.nachLinks);
 
   malen.save();
   malen.translate(p.x, p.y);                     // (0, 0) sind jetzt die Füße
@@ -4709,6 +4873,7 @@ function geistMalen(g) {
   const groesse = g.zappeln ? schrumpfen(g, g.groesse) : g.groesse;
   schattenMalen(g.x, g.z, groesse * 0.35, 0.2);
   const p = aufsBild(g.x + zittern, schweben, g.z);
+  spiegelungMalen(bild.geist, p.x, p.y, aufsBild(g.x, 0, g.z).y, groesse * p.groesse, g.dx < 0);
   malen.globalAlpha = 0.92;                             // Geister sind ein bisschen durchsichtig
   lebendigMalen(bild.geist, p.x, p.y, groesse * p.groesse, g.dx < 0, phaseVon(g), g.zappeln ? 0 : 1);
   ueberstrahlen(bild.geist, p.x, p.y, groesse * p.groesse, 0.22);
@@ -4791,6 +4956,7 @@ function bossMalen(k) {
   }
   schattenMalen(k.x, k.z, groesse * 0.38, 0.3);
   const p = aufsBild(k.x + zittern, schweben, k.z);
+  if (kipp === 0 && !k.besiegt) spiegelungMalen(b, p.x, p.y, aufsBild(k.x, 0, k.z).y, groesse * p.groesse, k.truhe ? maennchen.x < k.x : k.drache ? maennchen.x > k.x : k.dx < 0);
   // Ein goldenes Leuchten um ihn herum – beim Blinken leuchtet es rot
   if (kipp === 0 && !keinGeist(k)) {
     malen.fillStyle = k.blinktGerade ? "rgba(255, 40, 80, " + (zeit % 8 < 4 ? 0.45 : 0.15) + ")"
@@ -4955,7 +5121,11 @@ function kraftBalkenObenMalen(k) {
     farbe.addColorStop(0, "#6fd3ff"); farbe.addColorStop(1, "#2d7bff");
     malen.fillStyle = farbe;
     malen.beginPath(); malen.roundRect(x, y, Math.max(voll, 8), hoehe, 8); malen.fill();
+    malen.fillStyle = "rgba(255, 255, 255, 0.32)";                      // Glanz oben auf dem Balken
+    malen.beginPath(); malen.roundRect(x + 3, y + 3, Math.max(voll - 6, 2), hoehe * 0.32, 4); malen.fill();
   }
+  malen.strokeStyle = "#ffd34d"; malen.lineWidth = 2;                   // goldener Rahmen
+  malen.beginPath(); malen.roundRect(x - 6, y - 6, breite + 12, hoehe + 12, 12); malen.stroke();
   malen.fillStyle = "#ffd34d";
   malen.font = "800 22px 'Baloo 2', sans-serif";
   malen.textAlign = "right";
@@ -5182,10 +5352,15 @@ function herzMalen(x, y, groesse, voll) {
   malen.bezierCurveTo(-20, -2, -11, -17, 0, -6);
   malen.bezierCurveTo(11, -17, 20, -2, 0, 12);
   malen.closePath();
-  malen.fillStyle = voll ? "#ff3b5c" : "rgba(255, 59, 92, 0.12)";
+  if (voll) { const v = malen.createLinearGradient(0, -14, 0, 12); v.addColorStop(0, "#ff7a93"); v.addColorStop(0.55, "#ff3b5c"); v.addColorStop(1, "#c8143a"); malen.fillStyle = v; }
+  else malen.fillStyle = "rgba(255, 59, 92, 0.12)";
   malen.fill();
   malen.lineWidth = 2.5; malen.strokeStyle = voll ? "#fff4fa" : "#8a5566"; malen.lineJoin = "round";
   malen.stroke();
+  if (voll) {                                   // ein kleiner Glanzpunkt
+    malen.fillStyle = "rgba(255, 255, 255, 0.75)";
+    malen.beginPath(); malen.ellipse(-6.5, -6, 3.2, 2, -0.6, 0, 6.28); malen.fill();
+  }
   malen.restore();
 }
 
