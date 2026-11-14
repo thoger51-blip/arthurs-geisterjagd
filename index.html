@@ -260,6 +260,7 @@
 
 // ---- 0. Stellschrauben -------------------------------------------
 // Hier kann man das Spiel leichter oder schwerer machen.
+const WANDGEIST_SEKUNDEN = 60;   // so lange muss man den Wand-Geist (Level 16) insgesamt saugen
 const SAUGKRAFT = 0.32;         // so schnell wird ein Kraft-Balken leer (größer = leichter)
 const HERZEN_AM_ANFANG = 3;     // so viele Herzen hat das Männchen in Level 2
 const SCHONZEIT = 120;          // so lange ist man nach einem Treffer sicher (60 = 1 Sekunde)
@@ -606,6 +607,9 @@ const ZIMMER = {
   // Level 15 – Raum 3: das große Skelett
   34: { level: 15, hinten: "#1f1f26", links: "#1a1a20", rechts: "#15151a", streifen: "rgba(255,255,255,0.06)",
         herzen: true, herzenAnfang: 5, springen: true, geisterBeissen: true, kerzen: true },
+  // Level 16 – ein einziger Raum: der Wand-Geist, ein noch größerer Geist, der durch die Wände geht
+  35: { level: 16, hinten: "#22223a", links: "#1d1d33", rechts: "#18182b", streifen: "rgba(150,170,255,0.08)",
+        herzen: true, herzenAnfang: 5, springen: true, fenster: true, geld: GELD_LEVEL_3 },
   22: { level: 9, hinten: "#3b2418", links: "#331f15", rechts: "#2b1a11", streifen: "rgba(255,140,40,0.10)",
         herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
 };
@@ -1979,6 +1983,7 @@ function bossBild(k) {
   if (k.bandBoss) return bild.kabumm;
   if (k.kuerbis) return bild.kuerbis;
   if (k.drache) return k.maulAuf > 0 || k.besiegt ? bild.dracheFeuer : bild.drache;
+  if (k.wandGeist) return bild.geist;
   if (!k.truhe) return bild.koenig;
   if (k.besiegt || k.zappeln) return bild.truheAuf;                        // beim Einsaugen reißt sie den Deckel auf
   return Math.floor(zeit / 10) % 2 === 0 ? bild.truheAuf : bild.truheZu;   // sonst: auf, zu, auf, zu …
@@ -2026,7 +2031,8 @@ const MUSIK_DATEIEN = [null,
   "L06_R15_endboss", "L07_R16_raum", "L07_R17_raum", "L07_R18_endboss", "L08_R19_raum", "L08_R20_raum", "L08_R21_endboss",
   "L09_R22_endboss", "L10_R23_endboss", "L11_R24_endboss", "L12_R25_endboss", "L13_R26_raum", "L13_R27_raum",
   "L13_R28_endboss", "L14_R29_raum", "L14_R30_raum", "L14_R31_endboss",
-  "L13_R28_endboss", "L01_R01_raum", "L15_R32_endboss"];      // 32 und 33 leihen sich ein Lied, bis es eigene gibt
+  "L13_R28_endboss", "L01_R01_raum", "L15_R32_endboss",
+  "L06_R15_endboss"];                                         // 35 leiht sich das Lied vom Geisterkaiser      // 32 und 33 leihen sich ein Lied, bis es eigene gibt
 function musikDatei(name) { return "musik/" + name + ".mp3"; }
 const MUSIK_LAUT = 0.32;          // so laut ist die Musik (1 = ganz laut) – die Geräusche sollen noch gut zu hören sein
 let musikAn = true;
@@ -2699,6 +2705,10 @@ function einenBossBewegen(k) {
 
   // Level 10: Er wartet, bis man den Pümpel hat
   if (k.wartet) return;
+
+  // Level 16: Der Wand-Geist geht ab und zu in eine Wand hinein, wandert darin herum und kommt woanders wieder raus.
+  // Solange er in der Wand ist, kann man ihn nicht saugen.
+  if (k.wandGeist && wandGeistBewegen(k)) return;
   // Level 14: Das Skelett liegt als Knochenhaufen da, solange das Rätsel läuft
   if (k.zerfallen) return;
   // Level 14: Kabumm läuft auf seiner Insel hin und her und wirft Bomben aufs Laufband
@@ -2820,6 +2830,61 @@ function einenBossBewegen(k) {
     // Ab Level 2 kostet das ein Herz! (Im Lava-Raum schubst er nur – das Herz kostet dann die Lava.)
     if (ZIMMER[zimmer].herzen && !ZIMMER[zimmer].nurSchubsen) herzVerlieren();
   }
+}
+
+// Gibt "true" zurück, solange der Wand-Geist gerade mit der Wand beschäftigt ist
+function wandGeistBewegen(k) {
+  const B = BREITE;
+  if (!k.wand) {
+    k.wandUhr = k.wandUhr - 1;
+    if (k.wandUhr > 0) return false;
+    // In die nächste Wand – links, rechts oder hinten
+    const wahl = [["links", k.x], ["rechts", B - k.x], ["hinten", k.z]].sort((a, b) => a[1] - b[1])[Math.random() < 0.7 ? 0 : 1][0];
+    k.wand = { phase: "rein", seite: wahl, uhr: 0 };
+    lachTon(); sprechblase("Huiii – ab in die Wand!", k.x, 300, k.z);
+  }
+  const w = k.wand;
+  const ziel = (seite, x, z) => seite === "links" ? [-70, z] : seite === "rechts" ? [B + 70, z] : [x, -70];
+  if (w.phase === "rein") {
+    const [zx, zz] = ziel(w.seite, k.x, k.z);
+    const weit = Math.hypot(zx - k.x, zz - k.z);
+    if (weit < 5) { w.phase = "drin"; w.uhr = Math.floor(zufall(130, 220)); return true; }
+    k.x += (zx - k.x) / weit * 3.4; k.z += (zz - k.z) / weit * 3.4;
+    if (w.seite !== "hinten") k.dx = Math.abs(k.dx) * (zx < k.x ? -1 : 1);
+    return true;
+  }
+  if (w.phase === "drin") {
+    // In der Wand ist er nur als Schatten zu sehen – er wandert an der Wand entlang
+    if (w.seite === "hinten") k.x = Math.max(60, Math.min(B - 60, k.x + Math.sin(zeit * 0.02) * 2.5));
+    else k.z = Math.max(60, Math.min(TIEFE - 80, k.z + Math.sin(zeit * 0.02) * 2.5));
+    w.uhr = w.uhr - 1;
+    if (zeit % 40 === 0) sternchen(k.x, 120, Math.max(0, k.z), "#9fb3ff");
+    if (w.uhr > 0) return true;
+    // Woanders wieder raus: eine Wand weit weg vom Männchen
+    const seiten = [["links", 0], ["rechts", 0], ["hinten", 0]];
+    for (const se of seiten) se[1] = se[0] === "links" ? maennchen.x : se[0] === "rechts" ? B - maennchen.x : maennchen.z;
+    seiten.sort((a, b) => b[1] - a[1]);
+    w.seite = seiten[Math.random() < 0.75 ? 0 : 1][0];
+    const zielZ = zufall(k.zMin + 20, 400), zielX = zufall(150, B - 150);
+    [k.x, k.z] = ziel(w.seite, zielX, zielZ);
+    w.raus = w.seite === "links" ? [170, zielZ] : w.seite === "rechts" ? [B - 170, zielZ] : [zielX, k.zMin + 30];
+    w.phase = "raus";
+    buhTon(); sprechblase("Buh! Hier bin ich!", w.raus[0], 300, w.raus[1]);
+    return true;
+  }
+  // raus
+  const [zx, zz] = w.raus;
+  const weit = Math.hypot(zx - k.x, zz - k.z);
+  if (weit < 5) { k.wand = null; k.wandUhr = Math.floor(zufall(360, 560)); k.schubsPause = 50; return true; }
+  k.x += (zx - k.x) / weit * 3.4; k.z += (zz - k.z) / weit * 3.4;
+  return true;
+}
+// Ist der Wand-Geist gerade ganz oder halb in der Wand?
+function inDerWand(k) {
+  if (!k.wand) return 0;
+  if (k.wand.phase === "drin") return 1;
+  const raus = Math.max(-k.x + 90, k.x - BREITE + 90, -k.z + 60, 0);
+  return Math.min(1, raus / 130);
 }
 
 function hilfeRufen(k) {
@@ -3386,6 +3451,28 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     for (const g of geister) { g.kannZaubern = Math.random() < 0.5; g.zauberUhr = zufall(60, 220); }
     zaehlerZeigen("Gefangen: 0 von 6");
     tippZeigen("Sechs <b>Zauber-Geister</b>! Wenn einer <b>lila funkelt</b>, zaubert er sich weg. Saug ihn, wenn er <b>nicht funkelt</b>!");
+  }
+
+  if (nummer === 35) {
+    // Level 16 – Arthurs Zeichnung: ein noch größerer Geist. Er kann in die Wände hineingehen (dann kann man ihn
+    // nicht saugen). Sein Balken hat Striche, und man muss ihn insgesamt EINE MINUTE lang saugen –
+    // neben dem Balken läuft dabei die Zeit runter.
+    maennchen.x = 450; maennchen.z = 540;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    bosse = [bossMachen({
+      name: "Wand-Geist", wandGeist: true, x: 450, z: 260, groesse: 330, kraftMax: WANDGEIST_SEKUNDEN * 60 * SAUGKRAFT,
+      zMin: 150, tiefFaktor: 0.55, radius: 105, reichweite: 330, zieht: 0.25, jagt: 0.9, jagdPhasen: true,
+      dx: 0.9, dz: 0.5, stoss: 17, ruf: "HUIII!", balkenOben: true, striche: 6, uhr: true,
+    })];
+    bosse[0].schubsPause = 200; bosse[0].jagdUhr = 200; bosse[0].wandUhr = 420; bosse[0].wand = null;
+    zaehlerZeigen("Der Wand-Geist!");
+    tippZeigen("Der <b>Wand-Geist</b>! Du musst ihn <b>eine Minute</b> lang saugen – die Uhr am Balken zeigt, wie lange noch. Wenn er <b>in der Wand</b> ist, kannst du ihn nicht saugen!");
+    bannerZeigen("Level 16");
+    setTimeout(() => {
+      if (zimmer === 35 && bosse[0]) { lachTon(); sprechblase("Mich kriegst du nie – ich geh durch Wände!", bosse[0].x, 400, bosse[0].z); }
+    }, 900);
   }
 
   if (nummer === 34) {
@@ -4223,7 +4310,7 @@ function dekoThema(z) {
   if (z === 28 || z === 29) return "kuerbis";
   if (z === 30 || z === 34) return "knochen";
   if (z === 32) return "kuerbis";
-  if (z === 33) return "spuk";
+  if (z === 33 || z === 35) return "spuk";
   if (z === 31) return "bombe";
   const L = ZIMMER[z].level;
   return L <= 2 ? "kinder" : L <= 4 ? "buecher" : L === 5 ? "schatz" : L <= 7 ? "burg" : L === 8 ? "donner"
@@ -4954,9 +5041,10 @@ function bossMalen(k) {
   } else if (k.besiegt) {
     groesse = Math.max(10, schrumpfen(k, groesse) * (1 - k.verschwinden / 80));   // … oder er wird eingesaugt
   }
-  schattenMalen(k.x, k.z, groesse * 0.38, 0.3);
-  const p = aufsBild(k.x + zittern, schweben, k.z);
-  if (kipp === 0 && !k.besiegt) spiegelungMalen(b, p.x, p.y, aufsBild(k.x, 0, k.z).y, groesse * p.groesse, k.truhe ? maennchen.x < k.x : k.drache ? maennchen.x > k.x : k.dx < 0);
+  const wandAnteil = k.wandGeist ? inDerWand(k) : 0;
+  if (wandAnteil < 0.5) schattenMalen(k.x, k.z, groesse * 0.38, 0.3 * (1 - wandAnteil * 2));
+  const p = aufsBild(k.x + zittern, schweben, Math.max(-40, k.z));
+  if (kipp === 0 && !k.besiegt && wandAnteil === 0) spiegelungMalen(b, p.x, p.y, aufsBild(k.x, 0, k.z).y, groesse * p.groesse, k.truhe ? maennchen.x < k.x : k.drache ? maennchen.x > k.x : k.dx < 0);
   // Ein goldenes Leuchten um ihn herum – beim Blinken leuchtet es rot
   if (kipp === 0 && !keinGeist(k)) {
     malen.fillStyle = k.blinktGerade ? "rgba(255, 40, 80, " + (zeit % 8 < 4 ? 0.45 : 0.15) + ")"
@@ -4967,6 +5055,7 @@ function bossMalen(k) {
   if (k.wut > 0 && !k.kuerbis) malen.filter = "hue-rotate(150deg) saturate(1.5)";       // nach dem Schubsen leuchtet er rot vor Wut
   if (k.besiegt && k.wirdZuGeld && zeit % 6 < 3) malen.filter = "sepia(1) saturate(4) brightness(1.3)";   // er wird golden
   if (keinGeist(k) && !k.truhe) malen.globalAlpha = 1;
+  if (wandAnteil > 0) malen.globalAlpha = Math.max(0.16, 0.95 - wandAnteil * 0.8);   // in der Wand ist er nur ein Schatten
   if (k.bandBoss && k.getroffen > 0 && zeit % 4 < 2) malen.filter = "brightness(2.2)";
   if (k.kuerbis && k.getroffen > 0) {       // plattgedrückt!
     malen.save(); malen.translate(p.x, p.y); malen.scale(1.25, 0.6 + 0.4 * (1 - k.getroffen / 24)); malen.translate(-p.x, -p.y);
@@ -5124,8 +5213,38 @@ function kraftBalkenObenMalen(k) {
     malen.fillStyle = "rgba(255, 255, 255, 0.32)";                      // Glanz oben auf dem Balken
     malen.beginPath(); malen.roundRect(x + 3, y + 3, Math.max(voll - 6, 2), hoehe * 0.32, 4); malen.fill();
   }
+  // Level 16: Striche im Balken (jeder Abschnitt = 10 Sekunden saugen)
+  if (k.striche) {
+    for (let i = 1; i < k.striche; i++) {
+      const sx = x + breite * i / k.striche;
+      malen.fillStyle = "#111014"; malen.fillRect(sx - 2, y - 2, 4, hoehe + 4);
+      malen.fillStyle = "rgba(255, 255, 255, 0.25)"; malen.fillRect(sx + 2, y + 2, 1, hoehe - 4);
+    }
+  }
   malen.strokeStyle = "#ffd34d"; malen.lineWidth = 2;                   // goldener Rahmen
   malen.beginPath(); malen.roundRect(x - 6, y - 6, breite + 12, hoehe + 12, 12); malen.stroke();
+  // Level 16: Daneben läuft die Uhr – sie zählt nur, solange man ihn wirklich saugt
+  if (k.uhr) {
+    const rest = Math.ceil(Math.max(0, k.kraft) / SAUGKRAFT / 60);
+    const text = Math.floor(rest / 60) + ":" + String(rest % 60).padStart(2, "0");
+    const saugt = k.zappeln > 0, ux = x + breite + 22, uy = y - 8;
+    const puls = saugt ? 1 + Math.sin(zeit * 0.5) * 0.06 : 1;
+    malen.save();
+    malen.translate(ux + 56, uy + 19); malen.scale(puls, puls);
+    malen.fillStyle = saugt ? "#ffd34d" : "rgba(17, 16, 20, 0.88)";
+    malen.beginPath(); malen.roundRect(-56, -19, 112, 38, 19); malen.fill();
+    malen.strokeStyle = "#ffd34d"; malen.lineWidth = 2.5; malen.stroke();
+    // kleine Uhr mit Zeiger, der beim Saugen läuft
+    malen.fillStyle = "#fff4fa"; malen.beginPath(); malen.arc(-34, 0, 12, 0, 6.28); malen.fill();
+    malen.strokeStyle = "#111014"; malen.lineWidth = 2.5; malen.stroke();
+    const zw = -Math.PI / 2 + (1 - k.kraft / k.kraftMax) * Math.PI * 2 * (WANDGEIST_SEKUNDEN / 10);
+    malen.beginPath(); malen.moveTo(-34, 0); malen.lineTo(-34 + Math.cos(zw) * 9, Math.sin(zw) * 9); malen.stroke();
+    malen.fillStyle = saugt ? "#111014" : "#ffd34d";
+    malen.font = "800 24px 'Baloo 2', sans-serif"; malen.textAlign = "center"; malen.textBaseline = "middle";
+    malen.fillText(text, 14, 2);
+    malen.restore();
+    malen.textBaseline = "alphabetic";
+  }
   malen.fillStyle = "#ffd34d";
   malen.font = "800 22px 'Baloo 2', sans-serif";
   malen.textAlign = "right";
