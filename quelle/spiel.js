@@ -389,6 +389,9 @@ const ZIMMER = {
   // Level 16 – ein einziger Raum: der Wand-Geist, ein noch größerer Geist, der durch die Wände geht
   35: { level: 16, hinten: "#22223a", links: "#1d1d33", rechts: "#18182b", streifen: "rgba(150,170,255,0.08)",
         herzen: true, herzenAnfang: 5, springen: true, fenster: true, geld: GELD_LEVEL_3 },
+  // Level 17 – wie Level 16, aber schwerer: Lava-Eimer an der Decke, Strompistole an der Wand, Blinkmodus
+  36: { level: 17, hinten: "#3a1d1d", links: "#331919", rechts: "#2b1414", streifen: "rgba(255,120,60,0.08)",
+        herzen: true, herzenAnfang: 5, springen: true, geld: GELD_LEVEL_3 },
   22: { level: 9, hinten: "#3b2418", links: "#331f15", rechts: "#2b1a11", streifen: "rgba(255,140,40,0.10)",
         herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
 };
@@ -812,6 +815,7 @@ const KANONEN_ARTEN = {
   dynamit: { bild: "kanone",       massstab: 0.8, ankerX: 46.4,  ankerY: 79,   winkel0: 1.4407, muendung: 239, rohr: 175, abstand: 50,  schwenk: 0.72 },
   kugel:   { bild: "kanone",       massstab: 0.8, ankerX: 46.4,  ankerY: 79,   winkel0: 1.4407, muendung: 239, rohr: 175, abstand: 50,  schwenk: 0.6 },
   tinte:   { bild: "kanone",       massstab: 0.8, ankerX: 46.4,  ankerY: 79,   winkel0: 1.4407, muendung: 239, rohr: 175, abstand: 50,  schwenk: 0.5 },
+  strom:   { bild: null,           massstab: 1.0, ankerX: 0,     ankerY: 0,    winkel0: 0,      muendung: 70,  rohr: 80,  abstand: 40,  schwenk: 0.55 },
   netz:    { bild: "kanoneSpinne", massstab: 1.0, ankerX: 105.6, ankerY: 70.2, winkel0: 0,      muendung: 109, rohr: 115, abstand: 125, schwenk: 0.55 },
 };
 const DYNAMIT = { massstab: 0.9, ankerX: 21.2, ankerY: 45.9, winkel0: 1.408 };
@@ -861,9 +865,10 @@ function kanonenBewegen() {
     if (k.schussUhr <= 0) {
       k.schussUhr = k.pause;
       k.rueckstoss = 12;
-      if (k.art === "netz") pflatschTon(); else bummTon();
+      if (k.art === "netz") pflatschTon(); else if (k.art !== "strom") bummTon();
       const richtX = Math.cos(k.winkel), richtZ = Math.sin(k.winkel);
-      const tempo = k.art === "netz" ? NETZ_TEMPO : k.art === "kugel" ? 1.8 : (ZIMMER[zimmer].dynamitTempo || DYNAMIT_TEMPO);
+      if (k.art === "strom") stromTon();
+      const tempo = k.art === "netz" ? NETZ_TEMPO : k.art === "kugel" ? 1.8 : k.art === "strom" ? 4.2 : (ZIMMER[zimmer].dynamitTempo || DYNAMIT_TEMPO);
       dynamit.push({
         art: k.art,               // Dynamit oder Netz
         x: k.x + richtX * A.rohr, z: k.z + richtZ * A.rohr,
@@ -886,7 +891,7 @@ function dynamitBewegen() {
     d.wackeln = d.wackeln + 0.2 * tempo;
     d.alter = d.alter + 1;
     const netz = d.art === "netz";
-    if (!netz && zeit % 4 === 0) glitzer.push({ x: d.x, y: 55, z: d.z, dx: zufall(-1, 1), dy: zufall(0, 2), dz: zufall(-1, 1), leben: 14, farbe: "#ffb347" });
+    if (!netz && zeit % 4 === 0) glitzer.push({ x: d.x, y: 55, z: d.z, dx: zufall(-1, 1), dy: zufall(0, 2), dz: zufall(-1, 1), leben: 14, farbe: d.art === "strom" ? "#fff36b" : "#ffb347" });
     // Getroffen?
     const zumMaennchen = Math.hypot(maennchen.x - d.x, maennchen.z - d.z);
     const trefferWeite = netz ? (d.alter < NETZ_AUF ? 36 : 60) : 42;      // ein offenes Netz ist breiter
@@ -909,7 +914,7 @@ function dynamitBewegen() {
         maennchen.stossZ = ((maennchen.z - d.z) / weit) * 9;
         for (let i = 0; i < 16; i++) sternchen(d.x, 60, d.z, i % 2 ? "#ffb347" : "#ff5a5a");
         puffTon();
-        sprechblase(d.art === "feuer" ? "HEISS!" : d.art === "kugel" ? "BUMM!" : "PENG!", d.x, 170, d.z);
+        sprechblase(d.art === "feuer" ? "HEISS!" : d.art === "kugel" ? "BUMM!" : d.art === "strom" ? "BZZZT!" : "PENG!", d.x, 170, d.z);
         herzVerlieren(d.art === "kugel" ? 2 : 1);
       }
     }
@@ -1064,6 +1069,128 @@ function skelettRufen(k) {
 }
 
 // Eine schwarze Kanonenkugel (Level 12)
+// Level 17: Die Strompistole an der Wand – grau, mit gelber Spitze, und sie knistert
+function strompistoleMalen(k) {
+  const links = k.seite === "links";
+  const wand = aufsBild(links ? 0 : BREITE, 72, k.z), p = aufsBild(k.x, 72, k.z), s = p.groesse;
+  malen.strokeStyle = "#111014"; malen.lineWidth = 10 * s;
+  malen.beginPath(); malen.moveTo(wand.x, wand.y); malen.lineTo(p.x, p.y); malen.stroke();
+  const richtung = Math.atan2(Math.sin(k.winkel) * 0.7, Math.cos(k.winkel));
+  const zurueck = k.rueckstoss > 0 ? -k.rueckstoss * 0.6 : 0;
+  malen.save();
+  malen.translate(p.x + Math.cos(richtung) * zurueck, p.y + Math.sin(richtung) * zurueck);
+  malen.rotate(richtung); malen.scale(s, s);
+  malen.lineWidth = 4; malen.strokeStyle = "#111014"; malen.lineJoin = "round";
+  malen.fillStyle = "#6f7480"; malen.beginPath(); malen.roundRect(-14, 4, 22, 34, 6); malen.fill(); malen.stroke();   // Griff
+  malen.fillStyle = "#a9b0bd"; malen.beginPath(); malen.ellipse(10, 0, 34, 20, 0, 0, 6.28); malen.fill(); malen.stroke(); // Körper
+  malen.fillStyle = "#c9ced8"; malen.beginPath(); malen.ellipse(2, -6, 16, 6, 0, 0, 6.28); malen.fill();
+  malen.fillStyle = "#6f7480"; malen.beginPath(); malen.roundRect(38, -7, 26, 14, 4); malen.fill(); malen.stroke();    // Lauf
+  const knistern = 0.6 + 0.4 * Math.sin(zeit * 0.9);
+  malen.fillStyle = "#ffd34d"; malen.beginPath(); malen.arc(68, 0, 8 + knistern * 3, 0, 6.28); malen.fill(); malen.stroke();
+  if (zeit % 10 < 5) {                                   // kleine Funken an der Spitze
+    malen.strokeStyle = "#fff36b"; malen.lineWidth = 3;
+    malen.beginPath(); malen.moveTo(74, -4); malen.lineTo(84, -12); malen.lineTo(80, -2); malen.lineTo(92, -8); malen.stroke();
+  }
+  malen.restore();
+  if (k.rueckstoss > 6) {
+    const m = aufsBild(k.x + Math.cos(k.winkel) * 70, 72, k.z + Math.sin(k.winkel) * 70);
+    malen.fillStyle = "rgba(255, 245, 120, 0.85)"; malen.beginPath(); malen.arc(m.x, m.y, 26 * s, 0, 6.28); malen.fill();
+  }
+}
+// Ein Stromblitz: ein gelber Zickzack, der leuchtet
+function stromMalen(d) {
+  schattenMalen(d.x, d.z, 18, 0.2);
+  const p = aufsBild(d.x, 62, d.z), s = p.groesse;
+  const richtung = Math.atan2(d.dz * 0.7, d.dx);
+  malen.save();
+  malen.translate(p.x, p.y); malen.rotate(richtung); malen.scale(s * 1.5, s * 1.5);
+  const glut = malen.createRadialGradient(0, 0, 0, 0, 0, 46);
+  glut.addColorStop(0, "rgba(255, 250, 160, 0.9)"); glut.addColorStop(1, "rgba(255, 230, 60, 0)");
+  malen.fillStyle = glut; malen.beginPath(); malen.arc(0, 0, 46, 0, 6.28); malen.fill();
+  const zz = [[-34, 0], [-18, -10], [-8, 6], [6, -9], [16, 7], [34, 0]].map(([x, y]) => [x, y * (zeit % 6 < 3 ? 1 : -1)]);
+  for (const [farbe, dicke] of [["#111014", 9], ["#ffd34d", 5], ["#fffbe0", 2]]) {
+    malen.strokeStyle = farbe; malen.lineWidth = dicke; malen.lineJoin = "round"; malen.lineCap = "round";
+    malen.beginPath(); zz.forEach(([x, y], i) => (i ? malen.lineTo(x, y) : malen.moveTo(x, y))); malen.stroke();
+  }
+  malen.restore();
+}
+
+// ---- Level 17: der Lava-Eimer an der Decke ----
+// Er hängt an einem Seil. Alle 10 Sekunden kippt er um und gießt Lava auf den Boden darunter.
+// Wer dann darunter steht, verliert ein Herz. Die Zahl am Eimer zeigt, wann er wieder kippt.
+const EIMER_WARTEN = 600, EIMER_GIESSEN = 170, EIMER_RADIUS = 95;
+let eimer = null;
+function eimerBewegen() {
+  if (!eimer || wechselt || geschafft) return;
+  if (eimer.giesst > 0) {
+    eimer.giesst = eimer.giesst - 1;
+    if (eimer.giesst === 0) eimer.uhr = EIMER_WARTEN;
+    if (zeit % 3 === 0) glitzer.push({ x: eimer.x + zufall(-60, 60), y: 4, z: eimer.z + zufall(-30, 30), dx: zufall(-1, 1), dy: zufall(1, 3), dz: 0, leben: 18, farbe: "#ff7a1a" });
+    const drunter = Math.hypot(maennchen.x - eimer.x, (maennchen.z - eimer.z) * 1.4) < EIMER_RADIUS;
+    if (drunter && unverwundbar === 0 && eimer.giesst < EIMER_GIESSEN - 25) {
+      const weit = Math.hypot(maennchen.x - eimer.x, maennchen.z - eimer.z) || 1;
+      maennchen.stossX = ((maennchen.x - eimer.x) / weit) * 12; maennchen.stossZ = ((maennchen.z - eimer.z) / weit) * 12;
+      for (let i = 0; i < 16; i++) sternchen(maennchen.x, 60, maennchen.z, i % 2 ? "#ff7a1a" : "#ffd34d");
+      sprechblase("HEISS!", maennchen.x, 190, maennchen.z);
+      herzVerlieren();
+    }
+    return;
+  }
+  eimer.uhr = eimer.uhr - 1;
+  if (eimer.uhr === 120) warnTon();
+  if (eimer.uhr <= 0) { eimer.giesst = EIMER_GIESSEN; pflatschTon(); kameraWackeln(4); }
+}
+function eimerMalen() {
+  const E = eimer, oben = aufsBild(E.x, WANDHOEHE + 40, E.z), hang = aufsBild(E.x, 235, E.z), boden = aufsBild(E.x, 0, E.z);
+  const s = hang.groesse * 1.7;
+  // Die Warn-Fläche auf dem Boden: wird rot, kurz bevor er kippt
+  const bald = E.giesst > 0 ? 1 : E.uhr < 180 ? 0.4 + 0.3 * Math.sin(zeit * 0.4) : 0.18;
+  malen.save(); malen.translate(boden.x, boden.y); malen.scale(1, 0.42);
+  const sb = boden.groesse;
+  const warn = malen.createRadialGradient(0, 0, 0, 0, 0, EIMER_RADIUS * sb * 1.05);
+  warn.addColorStop(0, "rgba(255, 90, 30, " + bald * 0.55 + ")"); warn.addColorStop(1, "rgba(255, 90, 30, 0)");
+  malen.fillStyle = warn; malen.beginPath(); malen.arc(0, 0, EIMER_RADIUS * sb * 1.05, 0, 6.28); malen.fill();
+  malen.strokeStyle = "rgba(255, 211, 77, " + (0.3 + bald * 0.5) + ")"; malen.lineWidth = 4; malen.setLineDash([14, 10]);
+  malen.beginPath(); malen.arc(0, 0, EIMER_RADIUS * sb * 0.95, 0, 6.28); malen.stroke(); malen.setLineDash([]);
+  malen.restore();
+  // Die Lava fällt herunter und bildet eine Pfütze
+  if (E.giesst > 0) {
+    const t = 1 - E.giesst / EIMER_GIESSEN, breit = 26 * s * (E.giesst > 20 ? 1 : E.giesst / 20);
+    const strahl = malen.createLinearGradient(0, hang.y, 0, boden.y);
+    strahl.addColorStop(0, "#ffe066"); strahl.addColorStop(1, "#ff5a14");
+    malen.fillStyle = strahl;
+    malen.beginPath(); malen.roundRect(hang.x + 24 * s - breit / 2, hang.y + 10 * s, breit, Math.max(0, boden.y - hang.y - 10 * s), breit / 2); malen.fill();
+    malen.save(); malen.translate(boden.x, boden.y); malen.scale(1, 0.42);
+    const r = EIMER_RADIUS * boden.groesse * Math.min(1, t * 5) * (E.giesst > 20 ? 1 : E.giesst / 20);
+    const pf = malen.createRadialGradient(0, 0, 0, 0, 0, r + 1);
+    pf.addColorStop(0, "#ffe066"); pf.addColorStop(0.5, "#ff8a1a"); pf.addColorStop(1, "rgba(220, 50, 10, 0.75)");
+    malen.fillStyle = pf; malen.beginPath(); malen.arc(0, 0, r + 1, 0, 6.28); malen.fill();
+    malen.restore();
+  }
+  // Seil und Eimer (beim Gießen kippt er zur Seite)
+  malen.strokeStyle = "#111014"; malen.lineWidth = 4;
+  malen.beginPath(); malen.moveTo(oben.x, oben.y); malen.lineTo(hang.x, hang.y - 34 * s); malen.stroke();
+  const kipp = E.giesst > 0 ? Math.min(1, (EIMER_GIESSEN - E.giesst) / 15) * (E.giesst > 15 ? 1 : E.giesst / 15) : (E.uhr < 60 ? Math.sin(zeit * 0.8) * 0.06 : 0);
+  malen.save(); malen.translate(hang.x, hang.y - 34 * s); malen.rotate(kipp * 1.4); malen.scale(s, s);
+  malen.lineWidth = 4; malen.strokeStyle = "#111014"; malen.lineJoin = "round";
+  malen.beginPath(); malen.arc(0, 18, 26, Math.PI, 0); malen.stroke();                      // Henkel
+  malen.fillStyle = "#8b95a3";
+  malen.beginPath(); malen.moveTo(-30, 14); malen.lineTo(30, 14); malen.lineTo(23, 66); malen.lineTo(-23, 66); malen.closePath(); malen.fill(); malen.stroke();
+  malen.fillStyle = "#d0312d"; malen.fillRect(-26, 24, 52, 18);                            // der rote Streifen (wie bei Arthur)
+  malen.strokeStyle = "#111014"; malen.strokeRect(-26, 24, 52, 18);
+  malen.fillStyle = "#ff8a1a"; malen.beginPath(); malen.ellipse(0, 14, 30, 7, 0, 0, 6.28); malen.fill(); malen.stroke();   // Lava oben drin
+  malen.restore();
+  // Die Uhr: so viele Sekunden noch bis zum Kippen
+  if (E.giesst === 0) {
+    const sek = Math.ceil(E.uhr / 60), z = { x: hang.x + 70 * s, y: hang.y };
+    malen.fillStyle = sek <= 3 ? "#ff3b5c" : "rgba(17, 16, 20, 0.85)";
+    malen.beginPath(); malen.arc(z.x, z.y, 24, 0, 6.28); malen.fill();
+    malen.strokeStyle = "#ffd34d"; malen.lineWidth = 3; malen.stroke();
+    malen.fillStyle = "#fff4fa"; malen.font = "800 24px 'Baloo 2', sans-serif"; malen.textAlign = "center"; malen.textBaseline = "middle";
+    malen.fillText(sek, z.x, z.y + 2); malen.textBaseline = "alphabetic";
+  }
+}
+
 function kugelMalen(d) {
   schattenMalen(d.x, d.z, 20, 0.3);
   const p = aufsBild(d.x, 55, d.z), r = 19 * p.groesse;
@@ -1811,7 +1938,7 @@ const MUSIK_DATEIEN = [null,
   "L09_R22_endboss", "L10_R23_endboss", "L11_R24_endboss", "L12_R25_endboss", "L13_R26_raum", "L13_R27_raum",
   "L13_R28_endboss", "L14_R29_raum", "L14_R30_raum", "L14_R31_endboss",
   "L13_R28_endboss", "L01_R01_raum", "L15_R32_endboss",
-  "L06_R15_endboss"];                                         // 35 leiht sich das Lied vom Geisterkaiser      // 32 und 33 leihen sich ein Lied, bis es eigene gibt
+  "L06_R15_endboss", "L07_R18_endboss"];                      // 36 leiht sich das Lied vom Blitz-Geist                                         // 35 leiht sich das Lied vom Geisterkaiser      // 32 und 33 leihen sich ein Lied, bis es eigene gibt
 function musikDatei(name) { return "musik/" + name + ".mp3"; }
 const MUSIK_LAUT = 0.32;          // so laut ist die Musik (1 = ganz laut) – die Geräusche sollen noch gut zu hören sein
 let musikAn = true;
@@ -2488,6 +2615,7 @@ function einenBossBewegen(k) {
   // Level 16: Der Wand-Geist geht ab und zu in eine Wand hinein, wandert darin herum und kommt woanders wieder raus.
   // Solange er in der Wand ist, kann man ihn nicht saugen.
   if (k.wandGeist && wandGeistBewegen(k)) return;
+  if (k.nachWandRasen > 0) { k.nachWandRasen = k.nachWandRasen - 1; if (k.nachWandRasen === 0) k.blinktGerade = false; }
   // Level 14: Das Skelett liegt als Knochenhaufen da, solange das Rätsel läuft
   if (k.zerfallen) return;
   // Level 14: Kabumm läuft auf seiner Insel hin und her und wirft Bomben aufs Laufband
@@ -2654,7 +2782,16 @@ function wandGeistBewegen(k) {
   // raus
   const [zx, zz] = w.raus;
   const weit = Math.hypot(zx - k.x, zz - k.z);
-  if (weit < 5) { k.wand = null; k.wandUhr = Math.floor(zufall(360, 560)); k.schubsPause = 50; return true; }
+  if (weit < 5) {
+    k.wand = null; k.wandUhr = Math.floor(zufall(360, 560)); k.schubsPause = 50;
+    // Level 17: Er kommt im Blinkmodus aus der Wand und rast los – dann kann man ihn nicht saugen
+    if (k.blinkNachWand) {
+      const zuX = maennchen.x - k.x, zuZ = maennchen.z - k.z, w2 = Math.hypot(zuX, zuZ) || 1;
+      k.rasenX = zuX / w2 * BLINK_TEMPO; k.rasenZ = zuZ / w2 * BLINK_TEMPO;
+      k.blinktGerade = true; k.nachWandRasen = BLINK_DAUER; k.wandUhr = k.wandUhr + BLINK_DAUER;
+    }
+    return true;
+  }
   k.x += (zx - k.x) / weit * 3.4; k.z += (zz - k.z) / weit * 3.4;
   return true;
 }
@@ -2664,6 +2801,16 @@ function inDerWand(k) {
   if (k.wand.phase === "drin") return 1;
   const raus = Math.max(-k.x + 90, k.x - BREITE + 90, -k.z + 60, 0);
   return Math.min(1, raus / 130);
+}
+
+function stromTon() {
+  if (!ton) return;
+  try {
+    const o = ton.createOscillator(), g = ton.createGain(), t = ton.currentTime;
+    o.type = "sawtooth"; o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(120, t + 0.25);
+    g.gain.setValueAtTime(0.12, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.28);
+    o.connect(g); g.connect(ton.destination); o.start(t); o.stop(t + 0.3);
+  } catch (e) { /* egal */ }
 }
 
 function hilfeRufen(k) {
@@ -2754,6 +2901,7 @@ function alleBosseBesiegt() {
     if (zimmer === 19) { kanonen = []; dynamit = []; }      // die Kanone hört auf
     tippZeigen(geschafftText[zimmer] + " Die <b>Tür hinten</b> ist offen!");
   } else if (ZIMMER[zimmer].geld) {
+    eimer = null; kanonen = []; dynamit = [];
     // Die kleinen Helfer-Geister verpuffen …
     for (const g of geister) for (let i = 0; i < 6; i++) sternchen(g.x, 50, g.z, "#6fd3ff");
     geister = [];
@@ -2808,7 +2956,7 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
   document.getElementById("levelknopf").textContent = "Level " + ZIMMER[nummer].level;
   tuerOffen = false;
   glitzer = []; saugStreifen = []; sprechblasen = [];
-  geister = []; bosse = []; geld = []; rechnung = null; kiste = null; kanonen = []; dynamit = [];
+  geister = []; bosse = []; geld = []; rechnung = null; kiste = null; kanonen = []; dynamit = []; eimer = null;
   truhe = null; stufe = 0; platte = null; ventilator = null; knopf = null; zeitlupe = 0; maennchen.fliegt = false;
   becken = []; krake = null; ballons = []; kleckse = []; tinteModus = false; maennchen.tinte = 0; wurf.zielt = false; wurf.kraft = 0; wurf.hinweis = 0;
   maennchen.hoehe = 0; maennchen.sprungTempo = 0; sprungWunsch = false; maennchen.schlag = 0; maennchen.schlagPause = 0;
@@ -3230,6 +3378,31 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     for (const g of geister) { g.kannZaubern = Math.random() < 0.5; g.zauberUhr = zufall(60, 220); }
     zaehlerZeigen("Gefangen: 0 von 6");
     tippZeigen("Sechs <b>Zauber-Geister</b>! Wenn einer <b>lila funkelt</b>, zaubert er sich weg. Saug ihn, wenn er <b>nicht funkelt</b>!");
+  }
+
+  if (nummer === 36) {
+    // Level 17 – Arthurs Zeichnung: wieder der Wand-Geist (eine Minute saugen), aber schwerer:
+    // Er kommt im Blinkmodus aus der Wand. Oben hängt ein Lava-Eimer, der alle 10 Sekunden kippt,
+    // und links an der Wand schießt eine Strompistole.
+    maennchen.x = 450; maennchen.z = 540;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    bosse = [bossMachen({
+      name: "Wand-Geist", wandGeist: true, blinkNachWand: true, x: 450, z: 260, groesse: 330, kraftMax: WANDGEIST_SEKUNDEN * 60 * SAUGKRAFT,
+      zMin: 150, tiefFaktor: 0.55, radius: 105, reichweite: 330, zieht: 0.25, jagt: 0.9, jagdPhasen: true,
+      dx: 0.9, dz: 0.5, stoss: 17, ruf: "HUIII!", balkenOben: true, striche: 6, uhr: true,
+    })];
+    bosse[0].schubsPause = 200; bosse[0].jagdUhr = 200; bosse[0].wandUhr = 420; bosse[0].wand = null; bosse[0].nachWandRasen = 0;
+    eimer = { x: 690, z: 330, uhr: EIMER_WARTEN, giesst: 0 };
+    kanoneAufstellen("links", 470, 60, 240, "strom");
+    kanonen[0].wach = true;
+    zaehlerZeigen("Der Wand-Geist kommt zurück!");
+    tippZeigen("Eine Minute saugen! Vorsicht: Unter dem <b>Lava-Eimer</b> nur durchlaufen, wenn er nicht kippt – die Zahl zeigt, wann. Und spring über die <b>Stromblitze</b>!");
+    bannerZeigen("Level 17");
+    setTimeout(() => {
+      if (zimmer === 36 && bosse[0]) { lachTon(); sprechblase("Jetzt komm ich blinkend aus der Wand!", bosse[0].x, 400, bosse[0].z); }
+    }, 900);
   }
 
   if (nummer === 35) {
@@ -3793,7 +3966,9 @@ function lampenSammeln() {
     else if (k.bandBoss) add(k.x, 240, k.z, "255,180,80", 220, 0.6 + 0.3 * Math.sin(zeit * 0.9), 0.12);
     else if (!keinGeist(k)) add(k.x, 130, k.z, k.blinktGerade ? "255,60,90" : "90,170,255", 680, 0.9, 0.28);
   }
+  if (eimer && eimer.giesst > 0) add(eimer.x, 20, eimer.z, "255,120,40", 520, 1, 0.3);
   for (const d of dynamit) {
+    if (d.art === "strom") add(d.x, 60, d.z, "255,240,120", 300, 1, 0.35);
     if (d.art === "feuer") add(d.x, 60, d.z, "255,140,40", 420, 1, 0.35);
     else if (d.art === "dynamit") add(d.x, 60, d.z, "255,180,80", 170, 0.6, 0.1);
   }
@@ -4090,6 +4265,7 @@ function dekoThema(z) {
   if (z === 30 || z === 34) return "knochen";
   if (z === 32) return "kuerbis";
   if (z === 33 || z === 35) return "spuk";
+  if (z === 36) return "burg";
   if (z === 31) return "bombe";
   const L = ZIMMER[z].level;
   return L <= 2 ? "kinder" : L <= 4 ? "buecher" : L === 5 ? "schatz" : L <= 7 ? "burg" : L === 8 ? "donner"
@@ -4867,6 +5043,7 @@ function bossMalen(k) {
 
 // Eine Kanone an der Wand
 function kanoneMalen(k) {
+  if (k.art === "strom") { strompistoleMalen(k); return; }
   const A = KANONEN_ARTEN[k.art];
   const links = k.seite === "links";
   const wand = aufsBild(links ? 0 : BREITE, 72, k.z);
@@ -5383,11 +5560,12 @@ function allesMalen() {
   if (gruselZimmer && !ZIMMER[zimmer].lava) for (const l of LATERNEN) figuren.push({ z: l.z, malen: () => laterneMalen(l) });
   if (kiste) figuren.push({ z: kiste.z, malen: kisteMalen });
   for (const k of kanonen) figuren.push({ z: k.z, malen: () => kanoneMalen(k) });
+  if (eimer) figuren.push({ z: eimer.z - 60, malen: eimerMalen });
   if (truhe) figuren.push({ z: truhe.z, malen: truheMalen });
   if (krake) figuren.push({ z: becken[krake.becken].z, malen: krakeMalen });
   for (const k of bosse) if (k.kuerbis && k.angriff) figuren.push({ z: k.angriff.oz + 1, malen: () => kuerbisTentakelMalen(k) });
   for (const b of ballons) figuren.push({ z: b.z, malen: () => ballonMalen(b) });
-  for (const d of dynamit) figuren.push({ z: d.z, malen: () => (d.art === "netz" ? netzMalen(d) : d.art === "feuer" ? feuerballMalen(d) : d.art === "kugel" ? kugelMalen(d) : dynamitMalen(d)) });
+  for (const d of dynamit) figuren.push({ z: d.z, malen: () => (d.art === "netz" ? netzMalen(d) : d.art === "feuer" ? feuerballMalen(d) : d.art === "kugel" ? kugelMalen(d) : d.art === "strom" ? stromMalen(d) : dynamitMalen(d)) });
   figuren.push({
     z: maennchen.z,
     malen: () => {
@@ -5589,7 +5767,7 @@ function spielSchleife() {
   if (!pause) geisterBewegen(); else saugtGerade = false;
   if (!wechselt && !pause) bosseBewegen();
   kisteBewegen();
-  if (!pause) { kanonenBewegen(); dynamitBewegen(); truheBewegen(); platteBewegen(); hauenBewegen(); knopfBewegen(); krakeBewegen(); ballonsBewegen(); wurfBewegen(); kuerbisBewegen(); }
+  if (!pause) { kanonenBewegen(); eimerBewegen(); dynamitBewegen(); truheBewegen(); platteBewegen(); hauenBewegen(); knopfBewegen(); krakeBewegen(); ballonsBewegen(); wurfBewegen(); kuerbisBewegen(); }
   raetselUhrBewegen();
   geldBewegen();
   effekteBewegen();
