@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b2a4a">
+<title>Arthis Lesewelt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Baloo+2:wght@600;800&display=swap">
+<style>
+  /* Eine Nacht-Welt wie in der Geisterjagd: dunkelblauer Himmel, weiße Lese-Karten wie Heftseiten,
+     Gelb für Knöpfe und Sterne, Pink als Arthurs Farbe. Lesetext immer in Andika (Schulschrift mit einfachem a). */
+  :root {
+    --nacht: #1b2a4a;
+    --nacht-hell: #2a3d66;
+    --karte: #fffdf7;
+    --tinte: #1d1a22;
+    --gelb: #ffd34d;
+    --gelb-dunkel: #b8871a;
+    --pink: #ff69b4;
+    --pink-dunkel: #b83f81;
+    --gruen: #1f8a3c;
+    --gruen-hell: #c6f2cf;
+    --rot-hell: #ffd6dc;
+    --bogen: #2d3a8c;
+    --leise: #5f6474;
+    --lesen: "Andika", "Comic Sans MS", system-ui, sans-serif;
+    --anzeige: "Baloo 2", "Arial Rounded MT Bold", system-ui, sans-serif;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(ellipse at 50% 0%, var(--nacht-hell) 0%, var(--nacht) 60%, #111a30 100%) fixed;
+    color: #fff; font-family: var(--anzeige);
+    -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
+    padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    display: flex; flex-direction: column; align-items: center;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulation; -webkit-user-select: none; }
+  button:focus-visible { outline: 4px solid #6fd3ff; outline-offset: 3px; }
+  .seite { width: min(100%, 980px); flex: 1; display: flex; flex-direction: column; gap: 14px; }
+  [hidden] { display: none !important; }
+
+  /* Sterne im Hintergrund */
+  .himmel { position: fixed; inset: 0; pointer-events: none; z-index: -1; }
+
+  /* ---- Startseite ---- */
+  .kopf { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .kopf h1 { margin: 0; font-size: clamp(28px, 6vw, 46px); font-weight: 800; line-height: 1; text-wrap: balance; }
+  .kopf .zaehler { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  .pille { background: rgba(0,0,0,.28); border: 2px solid var(--gelb); color: var(--gelb); border-radius: 999px; padding: 4px 14px; font-weight: 800; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .geist { width: clamp(64px, 12vw, 96px); height: auto; flex: none; animation: schweben 3s ease-in-out infinite; }
+  @keyframes schweben { 50% { transform: translateY(-6px); } }
+  .sprechblase { background: var(--karte); color: var(--tinte); border-radius: 18px; padding: 10px 16px; font-family: var(--lesen); font-size: clamp(18px, 3vw, 24px); font-weight: 700; position: relative; max-width: 520px; }
+  .sprechblase::before { content: ""; position: absolute; left: -10px; top: 18px; border: 10px solid transparent; border-right-color: var(--karte); border-left: 0; }
+  .begruessung { display: flex; align-items: center; gap: 14px; }
+
+  .spiele { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .spielKachel {
+    background: var(--karte); color: var(--tinte); border: 4px solid var(--tinte); border-radius: 22px;
+    box-shadow: 0 6px 0 #0c1426; padding: 12px 8px 10px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    min-height: 132px; justify-content: center; transition: transform .1s;
+  }
+  .spielKachel:active { transform: translateY(3px); box-shadow: 0 3px 0 #0c1426; }
+  .spielKachel .bild { font-size: 46px; line-height: 1.1; }
+  .spielKachel .name { font-family: var(--lesen); font-weight: 700; font-size: 20px; line-height: 1.15; text-align: center; }
+  .spielKachel.mikro { background: #ffe6f2; }
+
+  .stickerbuch { background: rgba(0,0,0,.25); border: 2px dashed rgba(255,255,255,.35); border-radius: 20px; padding: 10px 14px; }
+  .stickerbuch h2 { margin: 0 0 6px; font-size: 20px; color: var(--gelb); }
+  .sticker { font-size: 34px; display: flex; flex-wrap: wrap; gap: 6px; min-height: 44px; }
+  .sticker .leer { font: 600 17px var(--anzeige); color: rgba(255,255,255,.6); align-self: center; }
+  .fuss { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .linkKnopf { background: transparent; border: 2px solid rgba(255,255,255,.7); border-radius: 999px; padding: 6px 18px; font-weight: 800; font-size: 18px; color: #fff; text-decoration: none; }
+
+  /* ---- Aufgabe ---- */
+  .leiste { display: flex; align-items: center; gap: 12px; }
+  .rund { width: 52px; height: 52px; border-radius: 50%; border: 3px solid var(--gelb); background: rgba(0,0,0,.3); color: var(--gelb); font-size: 24px; font-weight: 800; flex: none; }
+  .punkte { display: flex; gap: 8px; flex: 1; justify-content: center; }
+  .punkt { width: 22px; height: 22px; border-radius: 50%; border: 3px solid rgba(255,255,255,.7); }
+  .punkt.voll { background: var(--gelb); border-color: var(--gelb); }
+  .punkt.jetzt { border-color: var(--pink); box-shadow: 0 0 0 3px rgba(255,105,180,.35); }
+
+  .karte {
+    flex: 1; background: var(--karte); color: var(--tinte); border-radius: 26px; border: 4px solid var(--tinte);
+    box-shadow: 0 8px 0 #0c1426; padding: clamp(12px, 3vw, 28px); display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: clamp(10px, 3vh, 24px); text-align: center; min-height: 320px; position: relative;
+  }
+  .anweisung { display: flex; align-items: center; gap: 10px; font: 800 clamp(17px, 3vw, 24px) var(--anzeige); color: #6b3d8a; }
+  .anweisung button { border: 0; background: #efe4f7; border-radius: 999px; width: 40px; height: 40px; font-size: 20px; }
+  .lesetext { font-family: var(--lesen); font-weight: 700; font-size: clamp(38px, 8vw, 78px); line-height: 1.5; letter-spacing: .03em; }
+  .lesetext.satz { font-size: clamp(30px, 6vw, 60px); }
+  .wort { display: inline-block; white-space: nowrap; }
+  .silbe { display: inline-block; padding: 0 .04em .08em; border-bottom: .07em solid var(--bogen); border-radius: 0 0 50% 50% / 0 0 .3em .3em; margin: 0 .02em; }
+  .bildgross { font-size: clamp(64px, 14vw, 120px); line-height: 1; }
+
+  .wahl { display: flex; gap: clamp(10px, 3vw, 24px); flex-wrap: wrap; justify-content: center; }
+  .wahlKnopf {
+    background: #fff; color: var(--tinte); border: 4px solid var(--tinte); border-radius: 22px; box-shadow: 0 6px 0 #b8a98c;
+    font-family: var(--lesen); font-weight: 700; padding: 6px 16px; min-width: 76px; transition: transform .1s;
+  }
+  .wahlKnopf:active { transform: translateY(3px); box-shadow: 0 3px 0 #b8a98c; }
+  .wahlKnopf.bild { font-size: clamp(40px, 8vw, 72px); min-width: clamp(90px, 18vw, 160px); line-height: 1.15; }
+  .wahlKnopf.text { font-size: clamp(26px, 5vw, 46px); }
+  .wahlKnopf.buchstabe { font-size: clamp(36px, 7vw, 60px); min-width: clamp(70px, 14vw, 110px); }
+  .wahlKnopf.richtig { background: var(--gruen-hell); border-color: var(--gruen); box-shadow: 0 6px 0 var(--gruen); }
+  .wahlKnopf.falsch { background: var(--rot-hell); animation: wackeln .35s; }
+  .wahlKnopf.weg { visibility: hidden; }
+  @keyframes wackeln { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+
+  .luecke { display: inline-block; min-width: .7em; border-bottom: .08em dashed var(--pink); color: var(--pink-dunkel); }
+  .bauplatz { display: flex; gap: 6px; min-height: 1.6em; min-width: 3.5em; justify-content: center; font-family: var(--lesen); font-weight: 700; font-size: clamp(38px, 8vw, 72px); border-bottom: 4px dashed #cfc3ad; padding: 0 12px; }
+
+  .mikroKnopf {
+    font: 800 clamp(22px, 4.5vw, 34px) var(--anzeige); color: #fff; background: #d0312d;
+    border: 4px solid var(--tinte); border-radius: 999px; padding: 10px 30px; box-shadow: 0 6px 0 #7a1414;
+  }
+  .mikroKnopf.hoert { background: #2d7bff; box-shadow: 0 6px 0 #154a9c; animation: hoeren 1s ease-in-out infinite; }
+  .mikroKnopf.falsch { animation: wackeln .35s; }
+  @keyframes hoeren { 50% { transform: scale(1.06); } }
+  .gehoert { font: 600 clamp(15px, 2.6vw, 20px) var(--anzeige); color: var(--leise); min-height: 1.3em; }
+  .ausweg { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .auswegKnopf { font: 800 clamp(16px, 3vw, 21px) var(--anzeige); color: var(--tinte); background: var(--gelb); border: 3px solid var(--tinte); border-radius: 999px; padding: 6px 18px; box-shadow: 0 4px 0 var(--gelb-dunkel); }
+  .auswegKnopf.weiss { background: #fff; box-shadow: 0 4px 0 #b8a98c; }
+
+  .lob { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; background: rgba(255,253,247,.94); border-radius: 22px; font: 800 clamp(30px, 6vw, 52px) var(--anzeige); color: var(--gruen); }
+  .lob .gross { font-size: clamp(60px, 12vw, 100px); }
+
+  /* ---- Ende der Runde ---- */
+  .ende { text-align: center; gap: 16px; }
+  .ende .neuerSticker { font-size: clamp(90px, 20vw, 150px); line-height: 1; animation: hereinpurzeln .7s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes hereinpurzeln { from { transform: scale(0) rotate(-40deg); } to { transform: scale(1) rotate(0); } }
+  .gelbKnopf { font: 800 clamp(20px, 4vw, 28px) var(--anzeige); color: var(--tinte); background: var(--gelb); border: 4px solid var(--tinte); border-radius: 999px; padding: 8px 28px; box-shadow: 0 6px 0 var(--gelb-dunkel); }
+
+  @media (max-height: 520px) {
+    .karte { min-height: 0; gap: 6px; padding: 10px; }
+    .lesetext { font-size: min(9vw, 14vh); line-height: 1.3; }
+    .lesetext.satz { font-size: min(6vw, 10vh); }
+    .wahlKnopf.bild { font-size: min(8vw, 13vh); padding: 2px 10px; }
+    .wahlKnopf.text { font-size: min(5vw, 8vh); }
+    .bildgross { font-size: min(14vw, 20vh); }
+    .rund { width: 42px; height: 42px; font-size: 20px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<canvas class="himmel" id="himmel" aria-hidden="true"></canvas>
+<main class="seite">
+
+  <!-- Startseite -->
+  <section id="start" class="seite" aria-label="Spiele aussuchen">
+    <div class="kopf">
+      <h1>Arthis Lesewelt</h1>
+      <div class="zaehler"><span class="pille" id="sterneStart" aria-label="Sterne">⭐ 0</span></div>
+    </div>
+    <div class="begruessung">
+      <svg class="geist" viewBox="0 0 100 110" aria-hidden="true">
+        <path d="M50 6C25 6 12 26 12 50v50l12-9 13 10 13-10 13 10 13-10 12 9V50C88 26 75 6 50 6Z" fill="#9fdcff" stroke="#111014" stroke-width="5" stroke-linejoin="round"/>
+        <ellipse cx="37" cy="44" rx="7" ry="9" fill="#111014"/><ellipse cx="63" cy="44" rx="7" ry="9" fill="#111014"/>
+        <circle cx="39" cy="41" r="2.5" fill="#fff"/><circle cx="65" cy="41" r="2.5" fill="#fff"/>
+        <path d="M38 62q12 12 24 0" fill="none" stroke="#111014" stroke-width="5" stroke-linecap="round"/>
+        <ellipse cx="27" cy="57" rx="6" ry="4" fill="#ff9ccc"/><ellipse cx="73" cy="57" rx="6" ry="4" fill="#ff9ccc"/>
+      </svg>
+      <div class="sprechblase" id="begruessung">Hallo Arthi! Such dir ein Spiel aus.</div>
+    </div>
+    <div class="spiele" id="spiele"></div>
+    <div class="stickerbuch">
+      <h2>Mein Stickerbuch</h2>
+      <div class="sticker" id="stickerbuch"></div>
+    </div>
+    <div class="fuss">
+      <a class="linkKnopf" href="./">👻 Zur Geisterjagd</a>
+      <button class="linkKnopf" id="stimmeKnopf" type="button">🔊 Stimme: an</button>
+    </div>
+  </section>
+
+  <!-- Aufgabe -->
+  <section id="spiel" class="seite" aria-label="Lese-Aufgabe" hidden>
+    <div class="leiste">
+      <button class="rund" id="nachHause" type="button" aria-label="Zurück zur Auswahl">⌂</button>
+      <div class="punkte" id="punkte" aria-hidden="true"></div>
+      <span class="pille" id="sterneSpiel">⭐ 0</span>
+    </div>
+    <div class="karte" id="karte">
+      <div class="anweisung"><button type="button" id="nochmalSagen" aria-label="Anweisung nochmal hören">🔊</button><span id="anweisung"></span></div>
+      <div id="aufgabe" style="display:contents"></div>
+      <div class="lob" id="lob" hidden><span class="gross">🌟</span><span id="lobText">Super gelesen!</span></div>
+    </div>
+  </section>
+
+  <!-- Ende der Runde -->
+  <section id="ende" class="seite" aria-label="Runde geschafft" hidden>
+    <div class="karte ende">
+      <div style="font: 800 clamp(30px,6vw,48px) var(--anzeige); color: var(--gruen)">Runde geschafft!</div>
+      <div class="neuerSticker" id="neuerSticker">🦄</div>
+      <div style="font: 700 clamp(20px,3.5vw,26px) var(--lesen)">Ein neuer Sticker für dein Stickerbuch!</div>
+      <div class="wahl">
+        <button class="gelbKnopf" id="nochEineRunde" type="button">▶ Noch eine Runde</button>
+        <button class="gelbKnopf" id="zurAuswahl" type="button" style="background:#fff">⌂ Andere Spiele</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+// =====================================================================
+//  Arthis Lesewelt – Lese-Übungen nach seiner Fibel
+//  Nur Buchstaben, die Arthur schon kennt: A a, M m, I i, O o, U u, N n,
+//  D d, R r, F f, T t, P p, L l, E e. "|" trennt Silben (für die Silbenbögen).
+// =====================================================================
+
+// ---- Wörter und Sätze ----
+const WOERTER = [
+  ["Ma|ma", "👩"], ["Pa|pa", "👨"], ["O|pa", "👴"], ["O|ma", "👵"], ["La|ma", "🦙"], ["Nu|deln", "🍝"],
+  ["En|te", "🦆"], ["Pan|da", "🐼"], ["To|ma|te", "🍅"], ["Tul|pe", "🌷"], ["Lam|pe", "💡"], ["Pfan|ne", "🍳"],
+  ["U|fo", "🛸"], ["Am|pel", "🚦"], ["E|le|fant", "🐘"], ["Nil|pferd", "🦛"], ["Mond", "🌙"], ["No|te", "🎵"],
+  ["Ra|di|o", "📻"], ["Pu|del", "🐩"], ["Ei", "🥚"], ["Lol|li", "🍭"], ["Fee", "🧚"], ["Tor", "🥅"],
+  ["Pi|rat", "🏴‍☠️"], ["Pal|me", "🌴"], ["Me|lo|ne", "🍈"],
+];
+const LEICHT = ["Ma|ma", "Pa|pa", "O|pa", "O|ma", "La|ma", "U|fo", "Ei", "Tor", "Mond", "Fee", "En|te", "No|te"];
+const SAETZE = [
+  ["O|pa und O|ma.", "👴👵", ["👨👩", "👵👩"]],
+  ["Ma|ma und Pa|pa.", "👩👨", ["👴👵", "👩👴"]],
+  ["Pa|pa und O|pa.", "👨👴", ["👨👩", "👵👴"]],
+  ["Ein La|ma.", "🦙", ["🐘", "🐼"]],
+  ["Ma|ma malt ein U|fo.", "👩🎨🛸", ["👩🎨🦆", "👩🎨🌙"]],
+  ["O|pa malt ei|ne En|te.", "👴🎨🦆", ["👴🎨🛸", "👵🎨🦆"]],
+  ["Pa|pa malt den Mond.", "👨🎨🌙", ["👨🎨🍅", "👩🎨🌙"]],
+  ["O|ma malt ei|ne Tul|pe.", "👵🎨🌷", ["👵🎨💡", "👴🎨🌷"]],
+  ["Ein E|le|fant und ein Pan|da.", "🐘🐼", ["🐘🦙", "🦛🐼"]],
+  ["Nu|deln und To|ma|ten.", "🍝🍅", ["🍝🥚", "🍳🍅"]],
+  ["Ein Ei in der Pfan|ne.", "🍳🥚", ["🍝🍅", "💡🥚"]],
+  ["Ein Pu|del und ei|ne En|te.", "🐩🦆", ["🐩🐼", "🦙🦆"]],
+  ["Ein Pi|rat und ein U|fo.", "🏴‍☠️🛸", ["🏴‍☠️🌙", "🧚🛸"]],
+  ["O|pa ruft O|ma.", "👴📣👵", ["👵📣👴", "👨📣👩"]],
+];
+const STOLPER = [
+  ["Li|na ruft li|la Lo|la.", 2], ["Ma|ma ruft und Ni|no.", 2], ["A|mi|na am ruft Mi|a an.", 1],
+  ["Ni|na ruft im Pa|pa.", 2], ["O|pa U|fo ruft O|ma.", 1], ["Pa|pa malt Nu|deln ei|ne En|te.", 2],
+  ["Ni|na No|te ruft Ni|no.", 1], ["Lo|la ruft Pan|da Mi|lan.", 2], ["Mi|a und To|ma|te A|mi|na ma|len.", 2],
+  ["O|ma malt Ei den Mond.", 2], ["Ni|no und um Lo|la ma|len.", 2], ["Mo|mo ruft Tor Ni|na.", 2],
+];
+const FINDEN = [
+  ["Ma|ma", ["Mami", "Oma", "Mama", "Nina", "Mama", "Momo", "Imo", "Mama"]],
+  ["Pa|pa", ["Papi", "Papa", "Opa", "Pepe", "Papa", "Panda", "Opi", "Papa"]],
+  ["Ni|no", ["Nina", "Nino", "Lino", "Nino", "Imo", "Nina", "Nino", "Mino"]],
+  ["Lo|la", ["Lila", "Lola", "Lina", "Lola", "Lama", "Lolli", "Lola", "Ola"]],
+  ["O|pa", ["Opi", "Oma", "Opa", "Papa", "Opa", "Omi", "Ufo", "Opa"]],
+  ["En|te", ["Ente", "Elfe", "Ende", "Ente", "Note", "Ente", "Ernte", "Tante"]],
+  ["Mi|a", ["Mia", "Mama", "Mia", "Amina", "Mio", "Mia", "Nina", "Mila"]],
+];
+const BUCHSTABEN = "AMIOUNDRFTPLE".split("");
+const STICKER = ["🦄", "🐉", "🚀", "🦖", "🐙", "🦁", "🐸", "🦊", "🐢", "🐝", "🦋", "🐳", "🎃", "👻", "🏴‍☠️", "🌈", "⚽", "🍦", "🧸", "🎸", "🛸", "🐼", "🦕", "🐞"];
+
+const SPIELE = [
+  { id: "vorlesen", name: "Laut vorlesen", bild: "🎤", sag: "Laut vorlesen" },
+  { id: "wortbild", name: "Wort und Bild", bild: "🖼️", sag: "Wort und Bild" },
+  { id: "satzbild", name: "Satz und Bild", bild: "📖", sag: "Satz und Bild" },
+  { id: "finden", name: "Finde alle", bild: "🔍", sag: "Finde alle" },
+  { id: "stolper", name: "Stolper-Wort", bild: "🤪", sag: "Stolper-Wort" },
+  { id: "luecke", name: "Buchstabe fehlt", bild: "🧩", sag: "Buchstabe fehlt" },
+  { id: "silben", name: "Silben bauen", bild: "🔗", sag: "Silben bauen" },
+];
+const RUNDE = 5;
+
+// ---- Speichern (nur in diesem Browser) ----
+function laden(name, sonst) { try { const w = localStorage.getItem("lesewelt-" + name); return w === null ? sonst : JSON.parse(w); } catch (e) { return sonst; } }
+function speichern(name, wert) { try { localStorage.setItem("lesewelt-" + name, JSON.stringify(wert)); } catch (e) { /* egal */ } }
+let sterne = laden("sterne", 0), stickerbuch = laden("sticker", []), stimmeAn = laden("stimme", true);
+
+// ---- Kleine Helfer ----
+const $ = (id) => document.getElementById(id);
+const ohne = (t) => t.replace(/\|/g, "");
+const zufall = (liste) => liste[Math.floor(Math.random() * liste.length)];
+function mischen(liste) { const l = liste.slice(); for (let i = l.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [l[i], l[j]] = [l[j], l[i]]; } return l; }
+function silbenHtml(text) {
+  return text.split(" ").map((w) => {
+    const s = w.split("|");
+    return '<span class="wort">' + (s.length < 2 ? w : s.map((x) => '<span class="silbe">' + x + "</span>").join("")) + "</span>";
+  }).join(" ");
+}
+function knopf(klasse, inhalt, html) {
+  const k = document.createElement("button"); k.type = "button"; k.className = "wahlKnopf " + klasse;
+  if (html) k.innerHTML = inhalt; else k.textContent = inhalt;
+  return k;
+}
+function wackeln(k) { k.classList.remove("falsch"); void k.offsetWidth; k.classList.add("falsch"); }
+
+// ---- Stimme (sagt nur die Anweisungen – und vorlesen nur, wenn man um Hilfe bittet) ----
+function sagen(text) {
+  if (!stimmeAn) return;
+  try {
+    if (!("speechSynthesis" in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "de-DE"; u.rate = 0.9;
+    const de = speechSynthesis.getVoices().find((v) => v.lang && v.lang.startsWith("de"));
+    if (de) u.voice = de;
+    speechSynthesis.speak(u);
+  } catch (e) { /* dann eben ohne Stimme */ }
+}
+function vorlesenLangsam(text) {
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text); u.lang = "de-DE"; u.rate = 0.65; speechSynthesis.speak(u); } catch (e) { /* egal */ }
+}
+
+// ---- Töne ----
+let ton = null;
+function tonAn() { try { if (!ton) ton = new (window.AudioContext || window.webkitAudioContext)(); if (ton.state === "suspended") ton.resume(); } catch (e) { /* egal */ } }
+function piep(hz, dauer, start, form, laut) {
+  if (!ton) return;
+  try {
+    const o = ton.createOscillator(), g = ton.createGain(), t = ton.currentTime + (start || 0);
+    o.type = form || "triangle"; o.frequency.setValueAtTime(hz, t);
+    g.gain.setValueAtTime(laut || 0.15, t); g.gain.exponentialRampToValueAtTime(0.001, t + dauer);
+    o.connect(g); g.connect(ton.destination); o.start(t); o.stop(t + dauer + 0.05);
+  } catch (e) { /* egal */ }
+}
+const richtigTon = () => { piep(523, 0.14); piep(659, 0.14, 0.12); piep(784, 0.3, 0.24); };
+const falschTon = () => piep(200, 0.3, 0, "sawtooth", 0.1);
+const klickTon = () => piep(880, 0.08, 0, "triangle", 0.1);
+const stickerTon = () => [523, 659, 784, 1047].forEach((h, i) => piep(h, 0.2, i * 0.12));
+
+// =====================================================================
+//  Startseite
+// =====================================================================
+function startZeigen() {
+  $("start").hidden = false; $("spiel").hidden = true; $("ende").hidden = true;
+  $("sterneStart").textContent = "⭐ " + sterne;
+  const buch = $("stickerbuch"); buch.innerHTML = "";
+  if (!stickerbuch.length) buch.innerHTML = '<span class="leer">Nach jeder Runde bekommst du hier einen Sticker.</span>';
+  for (const s of stickerbuch) { const e = document.createElement("span"); e.textContent = s; buch.appendChild(e); }
+  $("stimmeKnopf").textContent = "🔊 Stimme: " + (stimmeAn ? "an" : "aus");
+}
+const spieleFeld = $("spiele");
+for (const s of SPIELE) {
+  const k = document.createElement("button"); k.type = "button";
+  k.className = "spielKachel" + (s.id === "vorlesen" ? " mikro" : "");
+  k.innerHTML = '<span class="bild">' + s.bild + '</span><span class="name">' + s.name + "</span>";
+  k.addEventListener("click", () => { tonAn(); klickTon(); rundeStarten(s.id); });
+  k.addEventListener("pointerenter", () => {});
+  spieleFeld.appendChild(k);
+}
+$("stimmeKnopf").addEventListener("click", () => { stimmeAn = !stimmeAn; speichern("stimme", stimmeAn); startZeigen(); if (stimmeAn) sagen("Die Stimme ist an."); });
+
+// =====================================================================
+//  Eine Runde: 5 Aufgaben, danach ein Sticker
+// =====================================================================
+let spielArt = null, nummer = 0, aufgabe = null, fehler = 0, zuletzt = [];
+function rundeStarten(art) {
+  spielArt = art; nummer = 0;
+  $("start").hidden = true; $("ende").hidden = true; $("spiel").hidden = false;
+  naechsteAufgabe();
+}
+function punkteZeigen() {
+  const p = $("punkte"); p.innerHTML = "";
+  for (let i = 0; i < RUNDE; i++) { const d = document.createElement("span"); d.className = "punkt" + (i < nummer ? " voll" : i === nummer ? " jetzt" : ""); p.appendChild(d); }
+  $("sterneSpiel").textContent = "⭐ " + sterne;
+}
+function neu(liste, schluessel) {        // nicht zweimal hintereinander dasselbe
+  for (let i = 0; i < 30; i++) { const x = zufall(liste); if (!zuletzt.includes(schluessel(x))) { zuletzt = [schluessel(x), ...zuletzt].slice(0, 10); return x; } }
+  return zufall(liste);
+}
+function naechsteAufgabe() {
+  fehler = 0; mikroStoppen();
+  $("lob").hidden = true;
+  punkteZeigen();
+  const feld = $("aufgabe"); feld.innerHTML = "";
+  const baue = { vorlesen: aufgabeVorlesen, wortbild: aufgabeWortBild, satzbild: aufgabeSatzBild, finden: aufgabeFinden,
+                 stolper: aufgabeStolper, luecke: aufgabeLuecke, silben: aufgabeSilben }[spielArt];
+  baue(feld);
+  sagen(aufgabe.sag);
+}
+function anweisung(text, sag) { $("anweisung").textContent = text; aufgabe.sag = sag; }
+$("nochmalSagen").addEventListener("click", () => { if (aufgabe) sagen(aufgabe.sag); });
+$("nachHause").addEventListener("click", () => { mikroStoppen(); try { speechSynthesis.cancel(); } catch (e) { /* egal */ } startZeigen(); });
+
+function geschafft(lob) {
+  if (!aufgabe || aufgabe.fertig) return;
+  aufgabe.fertig = true;
+  mikroStoppen();
+  richtigTon();
+  sterne++; speichern("sterne", sterne);
+  $("lobText").textContent = lob || zufall(["Super gelesen!", "Klasse!", "Toll gemacht!", "Prima, Arthi!", "Genau richtig!"]);
+  $("lob").hidden = false;
+  sagen($("lobText").textContent);
+  setTimeout(() => {
+    nummer++;
+    if (nummer >= RUNDE) rundeEnde(); else naechsteAufgabe();
+  }, 1500);
+}
+function falsch(k) {
+  fehler++; falschTon(); if (k) wackeln(k);
+  if (fehler === 2 && aufgabe.hilfe) aufgabe.hilfe();
+}
+function hilfeKnopf(feld, text) {
+  const h = document.createElement("button"); h.type = "button"; h.className = "auswegKnopf weiss"; h.textContent = "🔊 Vorlesen lassen";
+  h.hidden = true; h.addEventListener("click", () => vorlesenLangsam(text));
+  feld.appendChild(h);
+  aufgabe.hilfe = () => { h.hidden = false; };
+  return h;
+}
+function rundeEnde() {
+  $("spiel").hidden = true; $("ende").hidden = false;
+  const s = zufall(STICKER); stickerbuch.push(s); speichern("sticker", stickerbuch);
+  const el = $("neuerSticker"); el.textContent = s; el.style.animation = "none"; void el.offsetWidth; el.style.animation = "";
+  stickerTon(); sagen("Runde geschafft! Du bekommst einen neuen Sticker!");
+}
+$("nochEineRunde").addEventListener("click", () => rundeStarten(spielArt));
+$("zurAuswahl").addEventListener("click", startZeigen);
+
+// ---- Spiel: Wort und Bild ----
+function bilderWahl(feld, richtig, falsche) {
+  const w = document.createElement("div"); w.className = "wahl";
+  for (const b of mischen([richtig, ...falsche])) {
+    const k = knopf("bild", b);
+    k.addEventListener("click", () => (b === richtig ? (k.classList.add("richtig"), geschafft()) : falsch(k)));
+    w.appendChild(k);
+  }
+  feld.appendChild(w);
+}
+function aufgabeWortBild(feld) {
+  const pool = sterne < 15 ? WOERTER.filter((w) => LEICHT.includes(w[0])) : WOERTER;
+  const [wort, bild] = neu(pool, (x) => x[0]);
+  aufgabe = { text: wort };
+  anweisung("Lies das Wort – welches Bild passt?", "Lies das Wort. Welches Bild passt?");
+  const t = document.createElement("div"); t.className = "lesetext"; t.innerHTML = silbenHtml(wort); feld.appendChild(t);
+  bilderWahl(feld, bild, mischen(WOERTER.filter((x) => x[1] !== bild)).slice(0, 2).map((x) => x[1]));
+  hilfeKnopf(feld, ohne(wort));
+}
+// ---- Spiel: Satz und Bild ----
+function aufgabeSatzBild(feld) {
+  const [satz, bild, falsche] = neu(SAETZE, (x) => x[0]);
+  aufgabe = { text: satz };
+  anweisung("Lies den Satz – welches Bild passt?", "Lies den Satz. Welches Bild passt?");
+  const t = document.createElement("div"); t.className = "lesetext satz"; t.innerHTML = silbenHtml(satz); feld.appendChild(t);
+  bilderWahl(feld, bild, falsche);
+  hilfeKnopf(feld, ohne(satz));
+}
+// ---- Spiel: Finde alle ----
+function aufgabeFinden(feld) {
+  const [wort, liste] = neu(FINDEN, (x) => x[0]);
+  const ziel = ohne(wort);
+  aufgabe = { text: wort, noch: liste.filter((x) => x === ziel).length };
+  anweisung("Finde alle Wörter, die genauso aussehen!", "Finde alle Wörter, die genauso aussehen wie das Wort oben. Tipp sie an!");
+  const t = document.createElement("div"); t.className = "lesetext"; t.innerHTML = silbenHtml(wort); feld.appendChild(t);
+  const w = document.createElement("div"); w.className = "wahl";
+  for (const x of mischen(liste)) {
+    const k = knopf("text", x);
+    k.addEventListener("click", () => {
+      if (k.classList.contains("richtig")) return;
+      if (x === ziel) { k.classList.add("richtig"); klickTon(); aufgabe.noch--; if (aufgabe.noch === 0) geschafft("Alle gefunden!"); }
+      else falsch(k);
+    });
+    w.appendChild(k);
+  }
+  feld.appendChild(w);
+}
+// ---- Spiel: Stolper-Wort ----
+function aufgabeStolper(feld) {
+  const [satz, fehlerWort] = neu(STOLPER, (x) => x[0]);
+  aufgabe = { text: satz };
+  anweisung("Ein Wort passt nicht – tipp es an!", "Lies den Satz. Ein Wort passt nicht hinein. Tipp es an!");
+  const w = document.createElement("div"); w.className = "wahl";
+  satz.replace(/\.$/, "").split(" ").forEach((x, i) => {
+    const k = knopf("text", silbenHtml(x), true);
+    k.addEventListener("click", () => (i === fehlerWort ? (k.classList.add("richtig"), geschafft("Gefunden! Das passt nicht.")) : falsch(k)));
+    w.appendChild(k);
+  });
+  feld.appendChild(w);
+  hilfeKnopf(feld, ohne(satz));
+}
+// ---- Spiel: Buchstabe fehlt ----
+function aufgabeLuecke(feld) {
+  const kandidaten = WOERTER.filter((w) => ohne(w[0]).length >= 3);
+  const [wort, bild] = neu(kandidaten, (x) => x[0]);
+  const ganz = ohne(wort);
+  const stelle = Math.floor(Math.random() * ganz.length);
+  const richtig = ganz[stelle];
+  const gross = richtig === richtig.toUpperCase();
+  const falsche = mischen(BUCHSTABEN.filter((b) => b.toLowerCase() !== richtig.toLowerCase())).slice(0, 2).map((b) => (gross ? b : b.toLowerCase()));
+  aufgabe = { text: wort };
+  anweisung("Welcher Buchstabe fehlt?", "Schau das Bild an. Welcher Buchstabe fehlt im Wort?");
+  const b = document.createElement("div"); b.className = "bildgross"; b.textContent = bild; feld.appendChild(b);
+  const t = document.createElement("div"); t.className = "lesetext";
+  t.innerHTML = ganz.split("").map((c, i) => (i === stelle ? '<span class="luecke" id="lueckeFeld">&nbsp;</span>' : c)).join("");
+  feld.appendChild(t);
+  const w = document.createElement("div"); w.className = "wahl";
+  for (const c of mischen([richtig, ...falsche])) {
+    const k = knopf("buchstabe", c);
+    k.addEventListener("click", () => {
+      if (c === richtig) { k.classList.add("richtig"); const l = $("lueckeFeld"); l.textContent = c; l.style.borderBottomStyle = "solid"; geschafft(); }
+      else falsch(k);
+    });
+    w.appendChild(k);
+  }
+  feld.appendChild(w);
+  hilfeKnopf(feld, ganz);
+}
+// ---- Spiel: Silben bauen ----
+function aufgabeSilben(feld) {
+  const kandidaten = WOERTER.filter((w) => w[0].includes("|"));
+  const [wort, bild] = neu(kandidaten, (x) => x[0]);
+  const silben = wort.split("|");
+  let reihe = mischen(silben.map((s, i) => ({ s, i })));
+  if (reihe.every((x, i) => x.i === i)) reihe = reihe.reverse();
+  aufgabe = { text: wort, als: 0 };
+  anweisung("Bau das Wort aus den Silben!", "Schau das Bild an. Tipp die Silben in der richtigen Reihenfolge an!");
+  const b = document.createElement("div"); b.className = "bildgross"; b.textContent = bild; feld.appendChild(b);
+  const platz = document.createElement("div"); platz.className = "bauplatz"; feld.appendChild(platz);
+  const w = document.createElement("div"); w.className = "wahl";
+  for (const { s, i } of reihe) {
+    const k = knopf("text", s);
+    k.addEventListener("click", () => {
+      if (i === aufgabe.als) {
+        klickTon(); k.classList.add("weg");
+        const e = document.createElement("span"); e.className = "silbe"; e.textContent = s; platz.appendChild(e);
+        aufgabe.als++;
+        if (aufgabe.als === silben.length) geschafft();
+      } else falsch(k);
+    });
+    w.appendChild(k);
+  }
+  feld.appendChild(w);
+  hilfeKnopf(feld, ohne(wort));
+}
+
+// =====================================================================
+//  Spiel: Laut vorlesen (ins Mikrofon)
+//  Das Gerät hört zu und schreibt mit. Wir vergleichen großzügig: kleine Abweichungen zählen als richtig,
+//  wer in Silben liest ("La … ma") auch, bei Sätzen reichen die meisten Wörter.
+//  Ausweg nach zwei Fehlversuchen oder ohne Mikrofon: Bild antippen oder Papa/Mama bestätigt.
+// =====================================================================
+const Erkenner = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+let erkenner = null, hoertZu = false;
+const wortListe = (t) => t.toLowerCase().replace(/[.,!?;:„“"'-]/g, " ").split(/\s+/).filter(Boolean);
+function abstand(a, b) {
+  const d = []; for (let i = 0; i <= a.length; i++) d[i] = [i];
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+function richtigVorgelesen(gehoert, ziel) {
+  const soll = wortListe(ohne(ziel)), ist = wortListe(gehoert);
+  const stuecke = ist.slice();
+  for (let i = 0; i < ist.length; i++) for (let n = 2; n <= 3 && i + n <= ist.length; n++) stuecke.push(ist.slice(i, i + n).join(""));
+  let treffer = 0;
+  for (const w of soll) {
+    const erlaubt = w.length >= 5 ? 2 : w.length >= 3 ? 1 : 0;
+    if (stuecke.some((x) => abstand(x, w) <= erlaubt)) treffer++;
+  }
+  return soll.length <= 2 ? treffer >= soll.length : treffer / soll.length >= 0.6;
+}
+function aufgabeVorlesen(feld) {
+  const satzZeit = sterne >= 20 && Math.random() < 0.45;
+  let text, bild, falsche;
+  if (satzZeit) { [text, bild, falsche] = neu(SAETZE, (x) => x[0]); }
+  else {
+    const pool = sterne < 15 ? WOERTER.filter((w) => LEICHT.includes(w[0])) : WOERTER;
+    [text, bild] = neu(pool, (x) => x[0]);
+    falsche = mischen(WOERTER.filter((x) => x[1] !== bild)).slice(0, 2).map((x) => x[1]);
+  }
+  aufgabe = { text };
+  anweisung("Drück auf das Mikrofon und lies laut vor!", "Drück auf das Mikrofon und lies laut vor!");
+  const t = document.createElement("div"); t.className = "lesetext" + (satzZeit ? " satz" : ""); t.innerHTML = silbenHtml(text); feld.appendChild(t);
+  const mk = document.createElement("button"); mk.type = "button"; mk.className = "mikroKnopf"; mk.textContent = "🎤 Ich lese vor";
+  const gehoert = document.createElement("div"); gehoert.className = "gehoert"; gehoert.setAttribute("aria-live", "polite");
+  const ausweg = document.createElement("div"); ausweg.className = "ausweg"; ausweg.hidden = true;
+  const aBild = document.createElement("button"); aBild.type = "button"; aBild.className = "auswegKnopf"; aBild.textContent = "👆 Bild antippen";
+  const aEltern = document.createElement("button"); aEltern.type = "button"; aEltern.className = "auswegKnopf weiss"; aEltern.textContent = "✔ Papa/Mama hat zugehört";
+  const aHilfe = document.createElement("button"); aHilfe.type = "button"; aHilfe.className = "auswegKnopf weiss"; aHilfe.textContent = "🔊 Vorlesen lassen";
+  ausweg.append(aBild, aEltern, aHilfe);
+  feld.append(mk, gehoert, ausweg);
+  const auswegZeigen = () => { ausweg.hidden = false; };
+  aBild.addEventListener("click", () => { mikroStoppen(); mk.remove(); gehoert.remove(); ausweg.remove(); anweisung("Lies – und tipp das richtige Bild an!", "Lies und tipp das richtige Bild an."); bilderWahl(feld, bild, falsche); hilfeKnopf(feld, ohne(text)); sagen(aufgabe.sag); });
+  aEltern.addEventListener("click", () => geschafft());
+  aHilfe.addEventListener("click", () => vorlesenLangsam(ohne(text)));
+  if (!Erkenner) {
+    mk.hidden = true; gehoert.textContent = "Das Mikrofon geht hier leider nicht."; auswegZeigen();
+    anweisung("Lies laut vor – Papa oder Mama hören zu!", "Lies laut vor. Papa oder Mama hören zu. Oder tipp auf Bild antippen.");
+    return;
+  }
+  mk.addEventListener("click", () => {
+    tonAn();
+    if (hoertZu) { mikroStoppen(); return; }
+    try { speechSynthesis.cancel(); } catch (e) { /* egal */ }
+    erkenner = new Erkenner();
+    erkenner.lang = "de-DE"; erkenner.interimResults = true; erkenner.maxAlternatives = 5; erkenner.continuous = false;
+    let ok = false, letztes = "";
+    erkenner.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) for (let j = 0; j < e.results[i].length; j++) {
+        const tr = e.results[i][j].transcript;
+        if (j === 0) letztes = tr;
+        if (!ok && richtigVorgelesen(tr, text)) { ok = true; letztes = tr; }
+      }
+      gehoert.textContent = letztes ? "Ich höre: „" + letztes.trim() + "“" : "";
+      if (ok) { try { erkenner.stop(); } catch (x) { /* egal */ } geschafft(); }
+    };
+    erkenner.onerror = (e) => {
+      hoertZu = false; mk.classList.remove("hoert"); mk.textContent = "🎤 Nochmal vorlesen";
+      if (["not-allowed", "service-not-allowed", "audio-capture"].includes(e.error)) { gehoert.textContent = "Das Mikrofon ist nicht erlaubt."; mk.hidden = true; auswegZeigen(); }
+      else if (e.error === "network") { gehoert.textContent = "Ohne Internet kann ich nicht zuhören."; auswegZeigen(); }
+    };
+    erkenner.onend = () => {
+      hoertZu = false; mk.classList.remove("hoert");
+      if (ok || !aufgabe || aufgabe.fertig) return;
+      mk.textContent = "🎤 Nochmal vorlesen";
+      fehler++;
+      if (!letztes) gehoert.textContent = "Ich habe nichts gehört – lies ein bisschen lauter!";
+      else { falschTon(); wackeln(mk); }
+      if (fehler >= 2) auswegZeigen();
+    };
+    try {
+      erkenner.start(); hoertZu = true; mk.classList.add("hoert"); mk.textContent = "👂 Ich höre zu …";
+      const dieser = erkenner;
+      setTimeout(() => { if (hoertZu && erkenner === dieser) { try { dieser.stop(); } catch (x) { /* egal */ } } }, 12000);
+    } catch (e) { hoertZu = false; auswegZeigen(); }
+  });
+}
+function mikroStoppen() {
+  if (erkenner && hoertZu) { try { erkenner.abort(); } catch (e) { /* egal */ } }
+  hoertZu = false;
+}
+
+// =====================================================================
+//  Sterne im Hintergrund (ganz leise funkeln)
+// =====================================================================
+(function himmel() {
+  const c = $("himmel"), m = c.getContext("2d");
+  const ruhig = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let punkte = [];
+  function groesse() {
+    c.width = innerWidth; c.height = innerHeight;
+    punkte = Array.from({ length: Math.round(innerWidth * innerHeight / 9000) }, () => ({ x: Math.random() * c.width, y: Math.random() * c.height, r: Math.random() * 1.6 + 0.4, p: Math.random() * 6.28 }));
+  }
+  function malen(t) {
+    m.clearRect(0, 0, c.width, c.height);
+    for (const s of punkte) { m.globalAlpha = 0.35 + 0.35 * Math.sin(t / 900 + s.p); m.fillStyle = "#fff"; m.beginPath(); m.arc(s.x, s.y, s.r, 0, 6.28); m.fill(); }
+    if (!ruhig) requestAnimationFrame(malen);
+  }
+  addEventListener("resize", groesse); groesse(); malen(0);
+})();
+
+startZeigen();
+const stunde = new Date().getHours();
+$("begruessung").textContent = (stunde < 11 ? "Guten Morgen, Arthi!" : stunde < 18 ? "Hallo Arthi!" : "Guten Abend, Arthi!") + " Such dir ein Spiel aus.";
+</script>
+</body>
+</html>
