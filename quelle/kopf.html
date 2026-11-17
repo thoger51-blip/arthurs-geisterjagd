@@ -76,6 +76,7 @@
     font: 800 20px var(--schrift); color: var(--gold); background: rgba(17, 16, 20, .78);
     border: 2px solid var(--gold); border-radius: 50%; cursor: pointer; touch-action: manipulation;
   }
+  .musikknopf.lesewelt { top: 54px; display: flex; align-items: center; justify-content: center; text-decoration: none; font-size: 19px; box-sizing: border-box; }
   .musikknopf.aus { color: #8a7f86; border-color: #8a7f86; text-decoration: line-through; text-decoration-thickness: 3px; }
   .musikknopf:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
   .levelknopf:focus-visible, .levelwahl button:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
@@ -241,6 +242,7 @@
   <button class="nochmal" id="nochmal" hidden>Nochmal spielen</button>
   <button class="levelknopf" id="levelknopf" aria-haspopup="dialog">Level 1</button>
   <button class="musikknopf" id="musikknopf" aria-label="Musik ausschalten">♪</button>
+  <a class="musikknopf lesewelt" id="leseweltknopf" href="lesen.html" aria-label="Zur Lesewelt" title="Arthis Lesewelt">📚</a>
   <div class="levelwahl" id="levelwahl" role="dialog" aria-label="Level aussuchen" hidden>
     <h2>Welches Level?</h2>
     <div class="levelreihe" id="levelreihe"></div>
