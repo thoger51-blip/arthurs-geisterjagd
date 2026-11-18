@@ -392,6 +392,14 @@ const ZIMMER = {
   // Level 17 – wie Level 16, aber schwerer: Lava-Eimer an der Decke, Strompistole an der Wand, Blinkmodus
   36: { level: 17, hinten: "#3a1d1d", links: "#331919", rechts: "#2b1414", streifen: "rgba(255,120,60,0.08)",
         herzen: true, herzenAnfang: 5, springen: true, geld: GELD_LEVEL_3 },
+  // Level 18 – Raum 1: Lava mit Lücken (ums Eck springen) und ein Geist, der unter die Lava taucht
+  37: { level: 18, hinten: "#3d0f1c", links: "#340c18", rechts: "#2b0a14", streifen: "rgba(255,140,40,0.12)",
+        tuerHinten: { von: 380, bis: 500 }, herzen: true, herzenAnfang: 5, lava: true, springen: true,
+        weg: [[380, 470, 520, 570], [380, 300, 500, 410], [560, 300, 720, 380], [600, 130, 720, 240],
+              [380, 130, 540, 210], [380, -120, 500, 70]] },
+  // Level 18 – Raum 2: zwei kleine Geister mit eigener Leiste und ein ganz großer Geist (eine Minute saugen)
+  38: { level: 18, hinten: "#22223a", links: "#1d1d33", rechts: "#18182b", streifen: "rgba(150,170,255,0.08)",
+        herzen: true, herzenAnfang: 5, springen: true, fenster: true, geld: GELD_LEVEL_3 },
   22: { level: 9, hinten: "#3b2418", links: "#331f15", rechts: "#2b1a11", streifen: "rgba(255,140,40,0.10)",
         herzen: true, kerzen: true, springen: true, puempel: true, geld: GELD_LEVEL_3 },
 };
@@ -1889,7 +1897,7 @@ function bossBild(k) {
   if (k.bandBoss) return bild.kabumm;
   if (k.kuerbis) return bild.kuerbis;
   if (k.drache) return k.maulAuf > 0 || k.besiegt ? bild.dracheFeuer : bild.drache;
-  if (k.wandGeist) return bild.geist;
+  if (k.wandGeist || k.klein || k.tauchGeist) return bild.geist;
   if (!k.truhe) return bild.koenig;
   if (k.besiegt || k.zappeln) return bild.truheAuf;                        // beim Einsaugen reißt sie den Deckel auf
   return Math.floor(zeit / 10) % 2 === 0 ? bild.truheAuf : bild.truheZu;   // sonst: auf, zu, auf, zu …
@@ -1938,7 +1946,8 @@ const MUSIK_DATEIEN = [null,
   "L09_R22_endboss", "L10_R23_endboss", "L11_R24_endboss", "L12_R25_endboss", "L13_R26_raum", "L13_R27_raum",
   "L13_R28_endboss", "L14_R29_raum", "L14_R30_raum", "L14_R31_endboss",
   "L13_R28_endboss", "L01_R01_raum", "L15_R32_endboss",
-  "L06_R15_endboss", "L07_R18_endboss"];                      // 36 leiht sich das Lied vom Blitz-Geist                                         // 35 leiht sich das Lied vom Geisterkaiser      // 32 und 33 leihen sich ein Lied, bis es eigene gibt
+  "L06_R15_endboss", "L07_R18_endboss",
+  "L08_R20_raum", "L08_R21_endboss"];                         // 37 und 38 leihen sich Lieder aus Level 8                      // 36 leiht sich das Lied vom Blitz-Geist                                         // 35 leiht sich das Lied vom Geisterkaiser      // 32 und 33 leihen sich ein Lied, bis es eigene gibt
 function musikDatei(name) { return "musik/" + name + ".mp3"; }
 const MUSIK_LAUT = 0.32;          // so laut ist die Musik (1 = ganz laut) – die Geräusche sollen noch gut zu hören sein
 let musikAn = true;
@@ -2615,6 +2624,7 @@ function einenBossBewegen(k) {
   // Level 16: Der Wand-Geist geht ab und zu in eine Wand hinein, wandert darin herum und kommt woanders wieder raus.
   // Solange er in der Wand ist, kann man ihn nicht saugen.
   if (k.wandGeist && wandGeistBewegen(k)) return;
+  if (k.tauchGeist && tauchGeistBewegen(k)) return;
   if (k.nachWandRasen > 0) { k.nachWandRasen = k.nachWandRasen - 1; if (k.nachWandRasen === 0) k.blinktGerade = false; }
   // Level 14: Das Skelett liegt als Knochenhaufen da, solange das Rätsel läuft
   if (k.zerfallen) return;
@@ -2795,6 +2805,32 @@ function wandGeistBewegen(k) {
   k.x += (zx - k.x) / weit * 3.4; k.z += (zz - k.z) / weit * 3.4;
   return true;
 }
+// Level 18: Der Tauch-Geist taucht ab und zu unter die Lava. Unten kann man ihn nicht saugen –
+// aber er kann sich dort auch nicht bewegen. Nach ein paar Sekunden taucht er an derselben Stelle wieder auf.
+const TAUCH_RUNTER = 35, TAUCH_UNTEN = 170, TAUCH_HOCH = 35;
+function tauchGeistBewegen(k) {
+  if (!k.tauch) {
+    k.tauchUhr = k.tauchUhr - 1;
+    if (k.tauchUhr > 0) return false;
+    k.tauch = { phase: "runter", uhr: TAUCH_RUNTER };
+    pflatschTon(); sprechblase("Blubb – ab unter die Lava!", k.x, 260, k.z);
+  }
+  const T = k.tauch;
+  T.uhr = T.uhr - 1;
+  if (zeit % 6 === 0) glitzer.push({ x: k.x + zufall(-50, 50), y: 4, z: k.z + zufall(-20, 20), dx: zufall(-0.6, 0.6), dy: zufall(1, 2.5), dz: 0, leben: 20, farbe: zeit % 12 ? "#ff8a1a" : "#ffe066" });
+  if (T.uhr > 0) return true;
+  if (T.phase === "runter") { T.phase = "unten"; T.uhr = TAUCH_UNTEN; }
+  else if (T.phase === "unten") { T.phase = "hoch"; T.uhr = TAUCH_HOCH; buhTon(); sprechblase("Da bin ich wieder!", k.x, 260, k.z); }
+  else { k.tauch = null; k.tauchUhr = Math.floor(zufall(300, 460)); k.schubsPause = 40; }
+  return true;
+}
+// Wie tief ist er gerade? 0 = ganz oben, 1 = ganz unter der Lava
+function tauchTiefe(k) {
+  const T = k.tauch;
+  if (!T) return 0;
+  return T.phase === "runter" ? 1 - T.uhr / TAUCH_RUNTER : T.phase === "unten" ? 1 : T.uhr / TAUCH_HOCH;
+}
+
 // Ist der Wand-Geist gerade ganz oder halb in der Wand?
 function inDerWand(k) {
   if (!k.wand) return 0;
@@ -2890,12 +2926,13 @@ function alleBosseBesiegt() {
     setTimeout(koenigsMelodie, 300);
     zaehlerZeigen("Geisterkönig: besiegt!");
     tippZeigen("Du hast den <b>Geisterkönig</b> besiegt! Die Tür ist offen – auf zu Level 2!");
-  } else if (zimmer === 3 || zimmer === 6 || zimmer === 12 || zimmer === 14 || zimmer === 16 || zimmer === 17 || zimmer === 19 || zimmer === 29) {
+  } else if (zimmer === 3 || zimmer === 6 || zimmer === 12 || zimmer === 14 || zimmer === 16 || zimmer === 17 || zimmer === 19 || zimmer === 29 || zimmer === 37) {
     tuerOffen = true;
     setTimeout(siegesMelodie, 300);
     if (zimmer === 6) zaehlerZeigen("Kronen-Geist: besiegt!");
     if (zimmer === 12 || zimmer === 16) zaehlerZeigen("Truhe: eingesaugt!");
     if (zimmer === 17) zaehlerZeigen("Lava-Geist: besiegt!");
+    if (zimmer === 37) zaehlerZeigen("Tauch-Geist: besiegt!");
     const geschafftText = { 3: "Alle drei besiegt!", 6: "Besiegt!", 12: "Die Truhe ist eingesaugt!", 14: "Beide besiegt!",
                             16: "Der Truhen-Boss ist eingesaugt!", 17: "Der Lava-Geist ist weg!", 19: "Beide Blink-Könige besiegt!", 29: "Der Kürbis ist kaputt!" };
     if (zimmer === 19) { kanonen = []; dynamit = []; }      // die Kanone hört auf
@@ -3378,6 +3415,52 @@ function zimmerAufbauen(nummer, nochmalVersuchen) {
     for (const g of geister) { g.kannZaubern = Math.random() < 0.5; g.zauberUhr = zufall(60, 220); }
     zaehlerZeigen("Gefangen: 0 von 6");
     tippZeigen("Sechs <b>Zauber-Geister</b>! Wenn einer <b>lila funkelt</b>, zaubert er sich weg. Saug ihn, wenn er <b>nicht funkelt</b>!");
+  }
+
+  if (nummer === 37) {
+    // Level 18, erster Raum – Arthurs Idee: Lava mit Lücken im Weg, an den Ecken muss man springen.
+    // Ein mittelgroßer Geist schwebt über der Lava. Ab und zu taucht er unter – dann kann man ihn nicht saugen,
+    // aber er kann sich da unten auch nicht bewegen.
+    maennchen.x = 450; maennchen.z = 520;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    bosse = [bossMachen({
+      name: "Tauch-Geist", tauchGeist: true, x: 250, z: 260, groesse: 240, kraftMax: 150, radius: 72, stoss: 15,
+      jagt: 1.0, jagdPhasen: true, dx: 0.8, dz: 0.5,
+    })];
+    bosse[0].schubsPause = 180; bosse[0].tauchUhr = 360; bosse[0].tauch = null;
+    zaehlerZeigen("Der Tauch-Geist!");
+    tippZeigen("Spring über die <b>Lücken</b> – an den Ecken auch zur Seite! Saug den <b>Tauch-Geist</b>, wenn er nicht in der Lava ist.");
+    bannerZeigen("Level 18");
+    setTimeout(() => {
+      if (zimmer === 37 && bosse[0]) { lachTon(); sprechblase("In der Lava kriegst du mich nicht!", bosse[0].x, 300, bosse[0].z); }
+    }, 900);
+  }
+
+  if (nummer === 38) {
+    // Level 18, zweiter Raum: zwei kleine Geister mit eigener Leiste über dem Kopf –
+    // und ein ganz großer Geist, den man eine Minute lang saugen muss (mit Strichen und Uhr am Balken).
+    maennchen.x = 450; maennchen.z = 540;
+    maennchen.hatSauger = true;
+    maennchen.richtungX = 0; maennchen.richtungZ = -1; maennchen.blickt = "hinten";
+    sauger.versteckt = true;
+    bosse = [
+      bossMachen({ name: "Riesen-Geist", x: 450, z: 230, groesse: 380, kraftMax: WANDGEIST_SEKUNDEN * 60 * SAUGKRAFT,
+                   zMin: 160, tiefFaktor: 0.55, radius: 115, reichweite: 340, zieht: 0.25, jagt: 0.7, jagdPhasen: true,
+                   dx: 0.7, dz: 0.4, stoss: 17, balkenOben: true, striche: 6, uhr: true, wirdZuGeld: true }),
+      bossMachen({ name: "Kleiner Geist", klein: true, x: 200, z: 330, groesse: 140, kraftMax: 60, schwebt: 20, radius: 50,
+                   jagt: 1.5, jagdPhasen: true, dx: 1.2, dz: 0.8, stoss: 10 }),
+      bossMachen({ name: "Kleiner Geist", klein: true, x: 700, z: 330, groesse: 140, kraftMax: 60, schwebt: 20, radius: 50,
+                   jagt: 1.5, jagdPhasen: true, dx: -1.2, dz: 0.8, stoss: 10 }),
+    ];
+    bosse[0].schubsPause = 260; bosse[0].jagdUhr = 260;
+    bosse[1].schubsPause = 120; bosse[2].schubsPause = 160;
+    zaehlerZeigen("Drei Geister!");
+    tippZeigen("Zwei <b>kleine Geister</b> und ein <b>Riesen-Geist</b>! Den großen musst du <b>eine Minute</b> lang saugen – die Uhr zeigt, wie lange noch.");
+    setTimeout(() => {
+      if (zimmer === 38 && bosse[0]) { lachTon(); sprechblase("Wir sind zu dritt!", bosse[0].x, 420, bosse[0].z); }
+    }, 900);
   }
 
   if (nummer === 36) {
@@ -4265,7 +4348,8 @@ function dekoThema(z) {
   if (z === 30 || z === 34) return "knochen";
   if (z === 32) return "kuerbis";
   if (z === 33 || z === 35) return "spuk";
-  if (z === 36) return "burg";
+  if (z === 36 || z === 37) return "burg";
+  if (z === 38) return "spuk";
   if (z === 31) return "bombe";
   const L = ZIMMER[z].level;
   return L <= 2 ? "kinder" : L <= 4 ? "buecher" : L === 5 ? "schatz" : L <= 7 ? "burg" : L === 8 ? "donner"
@@ -4997,9 +5081,15 @@ function bossMalen(k) {
     groesse = Math.max(10, schrumpfen(k, groesse) * (1 - k.verschwinden / 80));   // … oder er wird eingesaugt
   }
   const wandAnteil = k.wandGeist ? inDerWand(k) : 0;
-  if (wandAnteil < 0.5) schattenMalen(k.x, k.z, groesse * 0.38, 0.3 * (1 - wandAnteil * 2));
-  const p = aufsBild(k.x + zittern, schweben, Math.max(-40, k.z));
-  if (kipp === 0 && !k.besiegt && wandAnteil === 0) spiegelungMalen(b, p.x, p.y, aufsBild(k.x, 0, k.z).y, groesse * p.groesse, k.truhe ? maennchen.x < k.x : k.drache ? maennchen.x > k.x : k.dx < 0);
+  const tiefe = k.tauchGeist ? tauchTiefe(k) : 0;
+  if (wandAnteil < 0.5 && tiefe < 0.5) schattenMalen(k.x, k.z, groesse * 0.38, 0.3 * (1 - wandAnteil * 2) * (1 - tiefe * 2));
+  const p = aufsBild(k.x + zittern, schweben - tiefe * (groesse * 1.05 + schweben), Math.max(-40, k.z));
+  if (tiefe > 0) {             // was unter der Lava ist, sieht man nicht
+    const flaeche = aufsBild(k.x, 0, k.z);
+    malen.save(); malen.beginPath(); malen.rect(0, 0, 960, flaeche.y); malen.clip();
+    k.abgeschnitten = true;
+  }
+  if (kipp === 0 && !k.besiegt && wandAnteil === 0 && tiefe === 0) spiegelungMalen(b, p.x, p.y, aufsBild(k.x, 0, k.z).y, groesse * p.groesse, k.truhe ? maennchen.x < k.x : k.drache ? maennchen.x > k.x : k.dx < 0);
   // Ein goldenes Leuchten um ihn herum – beim Blinken leuchtet es rot
   if (kipp === 0 && !keinGeist(k)) {
     malen.fillStyle = k.blinktGerade ? "rgba(255, 40, 80, " + (zeit % 8 < 4 ? 0.45 : 0.15) + ")"
@@ -5034,9 +5124,22 @@ function bossMalen(k) {
   // Geister-Bosse leuchten und strahlen etwas über
   if (kipp === 0 && b === bild.koenig && !(k.besiegt && k.wirdZuGeld)) ueberstrahlen(b, p.x, p.y, groesse * p.groesse, 0.2);
   malen.globalAlpha = 1;
+  if (k.abgeschnitten) {
+    malen.restore(); k.abgeschnitten = false;
+    // Blubberblasen und ein glühender Ring auf der Lava, wo er untergetaucht ist
+    const f = aufsBild(k.x, 0, k.z), r2 = groesse * f.groesse * 0.42;
+    malen.save(); malen.translate(f.x, f.y); malen.scale(1, 0.35);
+    malen.strokeStyle = "rgba(255, 230, 120, " + (0.4 + 0.3 * Math.sin(zeit * 0.3)) + ")"; malen.lineWidth = 6;
+    malen.beginPath(); malen.arc(0, 0, r2 * (0.8 + 0.15 * Math.sin(zeit * 0.15)), 0, 6.28); malen.stroke();
+    malen.restore();
+    if (tiefe === 1) {         // nur seine Augen schauen noch heraus
+      malen.fillStyle = "#111014";
+      for (const dx of [-0.11, 0.11]) { malen.beginPath(); malen.ellipse(f.x + dx * groesse * f.groesse, f.y - 6 * f.groesse, 6 * f.groesse, 4 * f.groesse, 0, 0, 6.28); malen.fill(); }
+    }
+  }
   // Das Ausrufezeichen: Er jagt gerade, er blinkt – oder er fängt gleich an zu blinken
   const gleichBlinken = k.blinkt && !k.blinktGerade && k.blinkUhr < 45;
-  if (((k.jagdPhasen && k.jagtGerade) || k.blinktGerade || gleichBlinken) && !k.besiegt && kipp === 0) {
+  if (((k.jagdPhasen && k.jagtGerade) || k.blinktGerade || gleichBlinken) && !k.besiegt && kipp === 0 && !k.tauch) {
     jagdZeichenMalen(k.x, schweben + groesse + 16, k.z);
   }
 }
@@ -5402,7 +5505,7 @@ function bombeMalen(b) {
 // Ein kleiner Kraft-Balken direkt über dem Kopf (für die drei Kronen-Geister).
 // Wer mehr Kraft hat, hat auch einen längeren Balken.
 function kraftBalkenUeberKopfMalen(k) {
-  if (k.besiegt) return;
+  if (k.besiegt || (k.tauchGeist && tauchTiefe(k) > 0.4)) return;
   const p = aufsBild(k.x, k.schwebt + Math.sin(k.wippen) * 12 + bossGroesse(k) + 26, k.z);
   const breite = k.kraftMax * 0.8 * p.groesse, hoehe = 11;
   const x = p.x - breite / 2, y = Math.max(8, p.y - hoehe);
