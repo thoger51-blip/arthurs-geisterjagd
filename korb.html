@@ -200,8 +200,10 @@ function laden(n, sonst) { try { const w = localStorage.getItem("korb-" + n); re
 function speichern(n, w) { try { localStorage.setItem("korb-" + n, JSON.stringify(w)); } catch (e) { /* egal */ } }
 let spieler = laden("spieler", [
   { name: "Arthi", schwer: false, treffer: 0, muenzen: 0 },
-  { name: "Papa", schwer: true, treffer: 0, muenzen: 0 },
+  { name: "Thorsten", schwer: true, treffer: 0, muenzen: 0 },
 ]);
+// Früher hieß der zweite Spieler "Papa" – jetzt "Thorsten"
+spieler.forEach((s) => { if (s.name === "Papa") s.name = "Thorsten"; });
 let stimmeAn = laden("stimme", true);
 
 // ---- Helfer ----
