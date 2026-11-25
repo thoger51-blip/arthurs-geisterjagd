@@ -120,6 +120,9 @@
          background: rgba(255,253,247,.96); border-radius: 22px; font: 800 clamp(30px, 6vw, 50px) var(--anzeige); color: var(--gruen); }
   .lob .gross { font-size: clamp(70px, 14vw, 120px); }
 
+  .minus { position: absolute; top: 14px; right: 18px; font: 800 clamp(26px, 5vw, 40px) var(--anzeige); color: #d0312d;
+           animation: wegfliegen 1.6s ease-out forwards; pointer-events: none; }
+  @keyframes wegfliegen { 0% { transform: scale(.6); opacity: 0; } 15% { transform: scale(1.15); opacity: 1; } 70% { opacity: 1; } 100% { transform: translateY(-40px); opacity: 0; } }
   .ansage { position: fixed; inset: 0; z-index: 9; display: flex; align-items: center; justify-content: center; background: rgba(10,16,32,.8); }
   .ansage div { font: 800 clamp(34px, 7vw, 64px) var(--anzeige); color: var(--gelb); text-align: center; animation: hereinpurzeln .6s cubic-bezier(.3,1.6,.5,1); }
   @keyframes hereinpurzeln { from { transform: scale(0) rotate(-20deg); } to { transform: scale(1); } }
@@ -150,7 +153,7 @@
     </div>
   </div>
   <p class="erklaerung" id="erklaerung">Korb in die Mitte, Ball werfen! Bei jedem <b>Treffer</b> tippst du auf deinen Knopf – dann fliegt ein Geist in dein Glas.
-    Sind <b>3 Geister</b> drin, kommt eine <b>Aufgabe</b>. Geschafft? Dann gibt es eine <b>Goldmünze</b>!</p>
+    Sind <b>3 Geister</b> drin, kommt eine <b>Aufgabe</b>. Geschafft? Dann gibt es eine <b>Goldmünze</b>! Aber Achtung: Wer sich vertippt, verliert eine Münze.</p>
   <div class="einstellungen" id="einstellungen" hidden></div>
   <div class="spieler" id="spieler"></div>
 </main>
@@ -339,7 +342,20 @@ function hilfeKnopf(feld, text) {
   h.addEventListener("click", () => sagen(text, true));
   feld.appendChild(h); aufgabe.hilfe = () => { h.hidden = false; };
 }
-function falsch(k) { fehler++; falschTon(); if (k) wackeln(k); if (fehler === 2 && aufgabe.hilfe) aufgabe.hilfe(); }
+// Falsch getippt: Pro Aufgabe kostet das einmal eine Münze (beim ersten Fehler). Unter null geht es nicht.
+function falsch(k) {
+  fehler++; falschTon(); if (k) wackeln(k);
+  if (!aufgabe.abgezogen) {
+    aufgabe.abgezogen = true;
+    const s = spieler[wer];
+    if (s.muenzen > 0) {
+      s.muenzen--; speichern("spieler", spieler);
+      const m = el("div", "minus", "−1 🪙"); $("karte").appendChild(m);
+      setTimeout(() => m.remove(), 1600);
+    }
+  }
+  if (fehler === 2 && aufgabe.hilfe) aufgabe.hilfe();
+}
 function geschafft() {
   if (!aufgabe || aufgabe.fertig) return;
   aufgabe.fertig = true;
