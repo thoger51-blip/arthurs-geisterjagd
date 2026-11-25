@@ -210,7 +210,7 @@
 // =====================================================================
 //  Arthis Lesewelt – Lese-Übungen nach seiner Fibel
 //  Nur Buchstaben, die Arthur schon kennt: A a, M m, I i, O o, U u, N n,
-//  D d, R r, F f, T t, P p, L l, E e. "|" trennt Silben (für die Silbenbögen).
+//  D d, R r, F f, T t, P p, L l, E e, S s. "|" trennt Silben (für die Silbenbögen).
 // =====================================================================
 
 // ---- Wörter und Sätze ----
@@ -220,8 +220,12 @@ const WOERTER = [
   ["U|fo", "🛸"], ["Am|pel", "🚦"], ["E|le|fant", "🐘"], ["Nil|pferd", "🦛"], ["Mond", "🌙"], ["No|te", "🎵"],
   ["Ra|di|o", "📻"], ["Pu|del", "🐩"], ["Ei", "🥚"], ["Lol|li", "🍭"], ["Fee", "🧚"], ["Tor", "🥅"],
   ["Pi|rat", "🏴‍☠️"], ["Pal|me", "🌴"], ["Me|lo|ne", "🍈"],
+  ["Tan|ne", "🌲"], ["Tor|te", "🎂"], ["Man|tel", "🧥"], ["Te|le|fon", "☎️"], ["Au|to", "🚗"], ["Tas|se", "☕"],
+  ["Tin|te", "🖋️"], ["La|ter|ne", "🏮"], ["A|mei|se", "🐜"], ["E|sel", "🫏"], ["Sa|lat", "🥗"], ["Son|ne", "☀️"],
+  ["Na|se", "👃"], ["See", "🏞️"], ["A|na|nas", "🍍"], ["Ro|se", "🌹"], ["Pin|sel", "🖌️"], ["Am|sel", "🐦"],
+  ["In|sel", "🏝️"], ["Lu|pe", "🔍"], ["Mund", "👄"],
 ];
-const LEICHT = ["Ma|ma", "Pa|pa", "O|pa", "O|ma", "La|ma", "U|fo", "Ei", "Tor", "Mond", "Fee", "En|te", "No|te"];
+const LEICHT = ["Au|to", "Son|ne", "Na|se", "See", "E|sel", "Ro|se", "Tas|se", "Mund", "Ma|ma", "Pa|pa", "O|pa", "O|ma", "La|ma", "U|fo", "Ei", "Tor", "Mond", "Fee", "En|te", "No|te"];
 const SAETZE = [
   ["O|pa und O|ma.", "👴👵", ["👨👩", "👵👩"]],
   ["Ma|ma und Pa|pa.", "👩👨", ["👴👵", "👩👴"]],
@@ -237,12 +241,21 @@ const SAETZE = [
   ["Ein Pu|del und ei|ne En|te.", "🐩🦆", ["🐩🐼", "🦙🦆"]],
   ["Ein Pi|rat und ein U|fo.", "🏴‍☠️🛸", ["🏴‍☠️🌙", "🧚🛸"]],
   ["O|pa ruft O|ma.", "👴📣👵", ["👵📣👴", "👨📣👩"]],
+  ["Ein Au|to und ei|ne Tas|se.", "🚗☕", ["🚗🌹", "🍍☕"]],
+  ["Die Son|ne ist am See.", "☀️🏞️", ["🌙🏞️", "☀️🏝️"]],
+  ["Ein E|sel und ei|ne A|mei|se.", "🫏🐜", ["🫏🦆", "🐘🐜"]],
+  ["Ni|no und A|mi|na es|sen Sa|lat.", "👦👧🥗", ["👦👧🍝", "👦👧🍍"]],
+  ["E|mil und Ot|to es|sen A|na|nas.", "👦👦🍍", ["👦👦🥗", "👦👦🍅"]],
+  ["Ei|ne Ro|se und ei|ne Tul|pe.", "🌹🌷", ["🌹🌲", "🌴🌷"]],
+  ["Ein Man|tel und ein Pin|sel.", "🧥🖌️", ["🧥🔍", "🎂🖌️"]],
 ];
 const STOLPER = [
   ["Li|na ruft li|la Lo|la.", 2], ["Ma|ma ruft und Ni|no.", 2], ["A|mi|na am ruft Mi|a an.", 1],
   ["Ni|na ruft im Pa|pa.", 2], ["O|pa U|fo ruft O|ma.", 1], ["Pa|pa malt Nu|deln ei|ne En|te.", 2],
   ["Ni|na No|te ruft Ni|no.", 1], ["Lo|la ruft Pan|da Mi|lan.", 2], ["Mi|a und To|ma|te A|mi|na ma|len.", 2],
   ["O|ma malt Ei den Mond.", 2], ["Ni|no und um Lo|la ma|len.", 2], ["Mo|mo ruft Tor Ni|na.", 2],
+  ["Tim ist in am Tor.", 2], ["Ni|no ruft Tan|ne Tan|te Ti|na.", 2], ["Ot|to und E|mil sind Sa|lat am See.", 4],
+  ["U|ma ruft Tor Sa|mi.", 2], ["Sa|mi muss Na|se los.", 2], ["Pa|pa und Mo|mo Son|ne le|sen.", 3],
 ];
 const FINDEN = [
   ["Ma|ma", ["Mami", "Oma", "Mama", "Nina", "Mama", "Momo", "Imo", "Mama"]],
@@ -252,8 +265,11 @@ const FINDEN = [
   ["O|pa", ["Opi", "Oma", "Opa", "Papa", "Opa", "Omi", "Ufo", "Opa"]],
   ["En|te", ["Ente", "Elfe", "Ende", "Ente", "Note", "Ente", "Ernte", "Tante"]],
   ["Mi|a", ["Mia", "Mama", "Mia", "Amina", "Mio", "Mia", "Nina", "Mila"]],
+  ["Sa|lat", ["Salat", "Salami", "Salat", "Sala", "Nase", "Salat", "Sonne", "Salto"]],
+  ["Ot|to", ["Otto", "Oma", "Otto", "Opa", "Tom", "Otto", "Toto", "Tim"]],
+  ["Son|ne", ["Sonne", "Tonne", "Sonne", "Nonne", "Tanne", "Sonne", "Sense", "Senne"]],
 ];
-const BUCHSTABEN = "AMIOUNDRFTPLE".split("");
+const BUCHSTABEN = "AMIOUNDRFTPLES".split("");
 const STICKER = ["🦄", "🐉", "🚀", "🦖", "🐙", "🦁", "🐸", "🦊", "🐢", "🐝", "🦋", "🐳", "🎃", "👻", "🏴‍☠️", "🌈", "⚽", "🍦", "🧸", "🎸", "🛸", "🐼", "🦕", "🐞"];
 
 const SPIELE = [
