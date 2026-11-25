@@ -124,6 +124,10 @@
   .ansage div { font: 800 clamp(34px, 7vw, 64px) var(--anzeige); color: var(--gelb); text-align: center; animation: hereinpurzeln .6s cubic-bezier(.3,1.6,.5,1); }
   @keyframes hereinpurzeln { from { transform: scale(0) rotate(-20deg); } to { transform: scale(1); } }
 
+  /* Arthi liest noch nur GROSSBUCHSTABEN (bei klein sehen I und l gleich aus) – darum alles Lese-Material in Großbuchstaben */
+  .lesetext, .wahlKnopf, .kasten, .bauplatz, .luecke { text-transform: uppercase; }
+  .lesetext { letter-spacing: .06em; }
+
   @media (max-height: 520px) {
     .karte { gap: 6px; padding: 10px; }
     .lesetext { font-size: min(9vw, 14vh); line-height: 1.25; }
